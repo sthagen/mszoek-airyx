@@ -21,6 +21,7 @@
 }
 
 - (Display *)display;
+- (Display *)getDisplay;
 
 - (void)setWindow:(id)window forID:(XID)i;
 

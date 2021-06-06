@@ -51,4 +51,12 @@ enum {
 
 @end
 
+#ifdef __cplusplus
+extern "C"
+{
+#endif
 void __NSInitializeProcess(int argc, const char *argv[]);
+#ifdef __cplusplus
+}
+#endif
+

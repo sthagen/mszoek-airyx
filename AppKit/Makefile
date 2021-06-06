@@ -571,6 +571,7 @@ LDFLAGS+= ${FMWK_LDFLAGS} -L/usr/local/lib \
 	  -Wl,-R/System/Library/Frameworks/QuartzCore.framework/Versions/A \
 	  -Wl,-R/System/Library/Frameworks/OpenGL.framework/Versions/A \
 	  -Wl,-R/System/Library/Frameworks/Onyx2D.framework/Versions/A \
+	  -Wl,-R/System/Library/Frameworks/DBusKit.framework/Versions/A \
 	  -L${BUILDROOT}/System/Library/Frameworks/Foundation.framework/Versions/Current \
 	  -L${BUILDROOT}/System/Library/Frameworks/CoreFoundation.framework/Versions/Current \
 	  -L${BUILDROOT}/System/Library/Frameworks/CoreGraphics.framework/Versions/Current \
@@ -579,7 +580,8 @@ LDFLAGS+= ${FMWK_LDFLAGS} -L/usr/local/lib \
 	  -L${BUILDROOT}/System/Library/Frameworks/QuartzCore.framework/Versions/Current \
 	  -L${BUILDROOT}/System/Library/Frameworks/OpenGL.framework/Versions/Current \
 	  -L${BUILDROOT}/System/Library/Frameworks/Onyx2D.framework/Versions/Current \
-	  -lFoundation -lCoreFoundation -lCoreGraphics -lCoreText -lCoreData -lQuartzCore -lOpenGL -lOnyx2D \
+	  -L${BUILDROOT}/System/Library/Frameworks/DBusKit.framework/Versions/Current \
+	  -lFoundation -lCoreFoundation -lCoreGraphics -lCoreText -lCoreData -lQuartzCore -lOpenGL -lOnyx2D -lDBusKit \
 	  -lobjc -lcairo -lfreetype -lfontconfig -lGL -lX11 -lXext -lXfixes -lXdamage -lm
 
 build: marshallheaders all

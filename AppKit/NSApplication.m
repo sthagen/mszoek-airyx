@@ -142,6 +142,9 @@ id NSApp=nil;
       dbusMenu = nil;
    }
 
+   // init the Qt subsystem
+   QApp = [[QKApplication new] retain];
+
    pthread_mutex_init(_lock,NULL);
    
    [self _showSplashImage];
@@ -597,24 +600,23 @@ id NSApp=nil;
   [dbusConnection performSelectorInBackground:@selector(run) withObject:nil];
    
    do {
-       pool = [NSAutoreleasePool new];
-       NSEvent           *event;
+      pool = [NSAutoreleasePool new];
+      NSEvent           *event;
 
-
-    event=[self nextEventMatchingMask:NSAnyEventMask untilDate:[NSDate distantFuture] inMode:NSDefaultRunLoopMode dequeue:YES];
+      event=[self nextEventMatchingMask:NSAnyEventMask untilDate:[NSDate distantFuture] inMode:NSDefaultRunLoopMode dequeue:YES];
 
     NS_DURING
-     [self sendEvent:event];
+      [self sendEvent:event];
 
     NS_HANDLER
-     [self reportException:localException];
+      [self reportException:localException];
     NS_ENDHANDLER
 
-    [self _checkForReleasedWindows];
-    [self _checkForTerminate];
+      [self _checkForReleasedWindows];
+      [self _checkForTerminate];
 
-    [pool release];
-   }while(_isRunning);
+      [pool release];
+   } while(_isRunning);
    [dbusConnection stop];
    [dbusMenu release];
    [dbusConnection release];

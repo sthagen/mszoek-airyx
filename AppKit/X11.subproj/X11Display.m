@@ -92,6 +92,10 @@ static int errorHandler(Display *display,XErrorEvent *errorEvent) {
    return _display;
 }
 
+-(Display *)getDisplay { // avoid name clash with [NSWindow display]
+   return _display;
+}
+
 -(NSArray *)screens {
    NSRect frame=NSMakeRect(0, 0,
                            DisplayWidth(_display, DefaultScreen(_display)),
