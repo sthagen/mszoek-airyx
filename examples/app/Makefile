@@ -24,15 +24,14 @@
 #             `-- sample.txt
 
 APP=CocoaDemo
-SRCS=main.mm MyView.m
+SRCS=main.m MyView.m
 MK_DEBUG_FILES=no
 RESOURCES=rsc Cloudy_Mountains.jpg CocoaDemo.png
 SLF=/System/Library/Frameworks
 FRAMEWORKS=${SLF}/AppKit ${SLF}/CoreGraphics ${SLF}/Onyx2D ${SLF}/OpenGL \
 	${SLF}/Foundation ${SLF}/CoreFoundation ${SLF}/DBusKit
 CFLAGS+= -g -fPIC
-CXXFLAGS= -g -I/usr/local/include/qt5 -fPIC
-LDFLAGS+=-L/usr/local/lib -lGL -L/usr/local/lib/qt5 -lQt5Widgets -lQt5Core
+LDFLAGS+=-L/usr/local/lib -lGL
 
 build: all
 
