@@ -600,6 +600,8 @@ id NSApp=nil;
   [dbusConnection performSelectorInBackground:@selector(run) withObject:nil];
    
    do {
+      [QApp processEvents];
+      
       pool = [NSAutoreleasePool new];
       NSEvent           *event;
 

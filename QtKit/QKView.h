@@ -22,15 +22,16 @@
  * THE SOFTWARE.
  */
 
- #import <AppKit/NSView.h>
+#import <AppKit/NSView.h>
 
- @interface QKView: NSView {
-     void *w;       /* QWidget */
- }
+@interface QKView: NSView {
+    void *qwindow;          /* QWindow */
+    void *topWidget;        /* QWidget */
+    void *windowContainer;  /* QWidget */
+    void *eventLoop;
+}
 
-- init;
-- (NSView *)hitTest: (NSPoint)point;
-- (void) mouseDown: (NSEvent *)event;
+-(void)button;
 
- @end
+@end
  

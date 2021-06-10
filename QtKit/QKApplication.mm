@@ -25,6 +25,7 @@
 
 #import "QKApplication.h"
 #import <QApplication>
+#import <QEventLoop>
 
 
 extern "C" int NSProcessInfoArgc;
@@ -43,8 +44,8 @@ extern "C" const char * const *NSProcessInfoArgv;
 }
 
 - (void) processEvents {
-    NSLog(@"processEvents - dispatcher = %x", QApplication::eventDispatcher());
-    QApplication::processEvents();
+//    QApplication::processEvents();
+//    QApplication::sendPostedEvents();
 }
 
 @end

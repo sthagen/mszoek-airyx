@@ -23,8 +23,12 @@
  */
 
 #import "QKView.h"
+#import <QWindow>
 #import <QWidget>
 #import <QPushButton>
+#import <QApplication>
+#import <QEventLoop>
+#import <QMouseEvent>
 #import <AppKit/NSDisplay.h>
 
 extern "C" {
@@ -35,66 +39,92 @@ extern "C" {
 
 - initWithFrame:(NSRect)frame {
     [super initWithFrame:frame];
-    w = new QWidget();
-    ((QWidget *)w)->setFixedSize(frame.size.width - frame.origin.x, frame.size.height - frame.origin.y);
-    ((QWidget *)w)->show();
+    topWidget = new QWidget();
+    ((QWidget *)topWidget)->resize(frame.size.width,frame.size.height);
     return self;
-}
-
-/* called by [NSWindow setContentView] */
-- (void) setFrame:(NSRect)frame {
-    [super setFrame:frame];
-    ((QWidget *)w)->setFixedSize(frame.size.width - frame.origin.x, frame.size.height - frame.origin.y);
 }
 
 /* called by [NSWindow setContentView] via [NSView insertSubview] */
 - (void) _setWindow:(NSWindow *)window {
-    int child = ((QWidget *)w)->winId();
-    XReparentWindow((Display *)[[NSDisplay currentDisplay] getDisplay], child, (Window)[[window platformWindow] windowHandle], _frame.origin.x, _frame.origin.y);
+    if(window != nil) {
+        // Create a QWindow from the native window & reparent top-level widget to it
+        qwindow = QWindow::fromWinId((Window)[[window platformWindow] windowHandle]);
+        windowContainer = QWidget::createWindowContainer((QWindow *)qwindow);
+        ((QWidget *)topWidget)->setParent((QWidget *)windowContainer);
+        ((QWidget *)topWidget)->show(); // widget is hidden after setParent()
+        ((QWidget *)windowContainer)->show();
+        ((QWindow *)qwindow)->show();
+        eventLoop = new QEventLoop((QWidget *)windowContainer);
+        [self performSelectorInBackground:@selector(loop) withObject:nil];
+    }
     [super _setWindow:window];
 }
 
+- (void) loop {
+    ((QEventLoop *)eventLoop)->exec();
+}
+
 - (void) button {
-    QPushButton *button = new QPushButton("Hello!", (QWidget *)w);
+    QPushButton *button = new QPushButton("Hello!", (QWidget *)topWidget);
     button->setGeometry(10,10,80,30);
     button->show();
 
 }
 
 - (void) mouseDown:(NSEvent *)event {
-    NSLog(@"mouse down %@", event);
+    // NSLog(@"mouse down %@", event);
+    NSPoint p = [event locationInWindow];
+    QMouseEvent *ev = new QMouseEvent(QEvent::MouseButtonPress, QPointF(p.x, p.y), Qt::LeftButton, 0, 0);
+    QApplication::postEvent((QWindow *)qwindow, ev);
+    ((QEventLoop *)eventLoop)->processEvents();
 }
 
 - (void) mouseUp:(NSEvent *)event {
-    NSLog(@"mouse up %@", event);
+    // NSLog(@"mouse up %@", event);
 }
 
 - (void) rightMouseDown:(NSEvent *)event {
-    NSLog(@"right mouse down %@", event);
+    // NSLog(@"right mouse down %@", event);
 }
 
 - (void) rightMouseUp:(NSEvent *)event {
-    NSLog(@"right mouse up %@", event);
+    // NSLog(@"right mouse up %@", event);
 }
 
 - (void) mouseMoved:(NSEvent *)event {
-    NSLog(@"mouse moved %@", event);
+    // NSLog(@"mouse moved %@", event);
 }
 
 - (void) mouseDragged:(NSEvent *)event {
-    NSLog(@"mouse dragged %@",event);
+    // NSLog(@"mouse dragged %@",event);
 }
 
 - (void) rightMouseDragged:(NSEvent *)event {
-    NSLog(@"right mouse dragged %@",event);
+    // NSLog(@"right mouse dragged %@",event);
 }
 
 - (void) mouseEntered:(NSEvent *)event {
-    NSLog(@"mouse entered %@",event);
+    // NSLog(@"mouse entered %@",event);
 }
 
 - (void) mouseExited:(NSEvent *)event {
-    NSLog(@"mouse exited %@",event);
+    // NSLog(@"mouse exited %@",event);
+}
+
+- (void) keyDown:(NSEvent *)event {
+    // NSLog(@"key down %@",event);
+}
+
+- (void) keyUp:(NSEvent *)event {
+    // NSLog(@"key down %@",event);
+}
+
+- (void) flagsChanged:(NSEvent *)event {
+    // NSLog(@"flags changed %@",event);
+}
+
+- (void) scrollWheel:(NSEvent *)event {
+    // NSLog(@"scroll wheel %@",event);
 }
 
 @end
