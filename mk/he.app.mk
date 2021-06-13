@@ -3,10 +3,10 @@ NO_ROOT=yes
 PROG=${APP_DIR}/Contents/Airyx/${APP}
 MAN=
 
-UID != id -u
-.if defined(UID) && ${UID} != 0
-INSTALLFLAGS=-U
-.endif
+#UID != id -u
+#.if defined(UID) && ${UID} != 0
+#INSTALLFLAGS=-U
+#.endif
 
 .if defined(FRAMEWORKS) && !empty(FRAMEWORKS)
 _LIBDIRS=

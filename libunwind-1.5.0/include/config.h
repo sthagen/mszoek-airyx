@@ -23,27 +23,27 @@
 /* #undef HAVE_ATOMIC_OPS_H */
 
 /* Define to 1 if you have the <byteswap.h> header file. */
-/* #undef HAVE_BYTESWAP_H */
+#define HAVE_BYTESWAP_H 1
 
 /* Define to 1 if you have the declaration of `PTRACE_CONT', and to 0 if you
    don't. */
-#define HAVE_DECL_PTRACE_CONT 0
+#define HAVE_DECL_PTRACE_CONT 1
 
 /* Define to 1 if you have the declaration of `PTRACE_POKEDATA', and to 0 if
    you don't. */
-#define HAVE_DECL_PTRACE_POKEDATA 0
+#define HAVE_DECL_PTRACE_POKEDATA 1
 
 /* Define to 1 if you have the declaration of `PTRACE_POKEUSER', and to 0 if
    you don't. */
-#define HAVE_DECL_PTRACE_POKEUSER 0
+#define HAVE_DECL_PTRACE_POKEUSER 1
 
 /* Define to 1 if you have the declaration of `PTRACE_SETREGSET', and to 0 if
    you don't. */
-#define HAVE_DECL_PTRACE_SETREGSET 0
+#define HAVE_DECL_PTRACE_SETREGSET 1
 
 /* Define to 1 if you have the declaration of `PTRACE_SINGLESTEP', and to 0 if
    you don't. */
-#define HAVE_DECL_PTRACE_SINGLESTEP 0
+#define HAVE_DECL_PTRACE_SINGLESTEP 1
 
 /* Define to 1 if you have the declaration of `PTRACE_SYSCALL', and to 0 if
    you don't. */
@@ -51,7 +51,7 @@
 
 /* Define to 1 if you have the declaration of `PTRACE_TRACEME', and to 0 if
    you don't. */
-#define HAVE_DECL_PTRACE_TRACEME 0
+#define HAVE_DECL_PTRACE_TRACEME 1
 
 /* Define to 1 if you have the declaration of `PT_CONTINUE', and to 0 if you
    don't. */
@@ -67,7 +67,7 @@
 
 /* Define to 1 if you have the declaration of `PT_IO', and to 0 if you don't.
    */
-#define HAVE_DECL_PT_IO 1
+#define HAVE_DECL_PT_IO 0
 
 /* Define to 1 if you have the declaration of `PT_STEP', and to 0 if you
    don't. */
@@ -97,7 +97,7 @@
 #define HAVE_ELF_H 1
 
 /* Define to 1 if you have the <endian.h> header file. */
-/* #undef HAVE_ENDIAN_H */
+#define HAVE_ENDIAN_H 1
 
 /* Define to 1 if you have the <execinfo.h> header file. */
 #define HAVE_EXECINFO_H 1
@@ -118,7 +118,7 @@
 #define HAVE_LINK_H 1
 
 /* Define if you have liblzma */
-#define HAVE_LZMA 1
+/* #undef HAVE_LZMA */
 
 /* Define to 1 if you have the <memory.h> header file. */
 #define HAVE_MEMORY_H 1
@@ -148,19 +148,19 @@
 #define HAVE_STRUCT_DL_PHDR_INFO_DLPI_SUBS 1
 
 /* Define to 1 if the system has the type `struct elf_prstatus'. */
-/* #undef HAVE_STRUCT_ELF_PRSTATUS */
+#define HAVE_STRUCT_ELF_PRSTATUS 1
 
 /* Define to 1 if the system has the type `struct prstatus'. */
-#define HAVE_STRUCT_PRSTATUS 1
+/* #undef HAVE_STRUCT_PRSTATUS */
 
 /* Defined if __sync atomics are available */
 #define HAVE_SYNC_ATOMICS 1
 
 /* Define to 1 if you have the <sys/elf.h> header file. */
-#define HAVE_SYS_ELF_H 1
+/* #undef HAVE_SYS_ELF_H */
 
 /* Define to 1 if you have the <sys/endian.h> header file. */
-#define HAVE_SYS_ENDIAN_H 1
+/* #undef HAVE_SYS_ENDIAN_H */
 
 /* Define to 1 if you have the <sys/link.h> header file. */
 /* #undef HAVE_SYS_LINK_H */
@@ -187,7 +187,7 @@
 #define HAVE_UNISTD_H 1
 
 /* Define if you have libz */
-#define HAVE_ZLIB 1
+/* #undef HAVE_ZLIB */
 
 /* Defined if __builtin_unreachable() is available */
 #define HAVE__BUILTIN_UNREACHABLE 1

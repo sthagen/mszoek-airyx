@@ -25,12 +25,11 @@
 
 APP=CocoaDemo
 SRCS=main.m MyView.m
-MK_DEBUG_FILES=no
 RESOURCES=rsc Cloudy_Mountains.jpg CocoaDemo.png
 SLF=/System/Library/Frameworks
-FRAMEWORKS=${SLF}/AppKit ${SLF}/CoreGraphics ${SLF}/Onyx2D ${SLF}/OpenGL \
-	${SLF}/Foundation ${SLF}/CoreFoundation ${SLF}/DBusKit
-LDFLAGS+=-L/usr/local/lib -lGL
+FRAMEWORKS=${SLF}/AppKit ${SLF}/CoreGraphics ${SLF}/Onyx2D \
+	${SLF}/Foundation ${SLF}/CoreFoundation ${SLF}/DBusKit ${SLF}/QuartzCore
+LDFLAGS+= -lGL -lm -lpthread
 
 build: all
 

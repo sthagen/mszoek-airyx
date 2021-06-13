@@ -2,7 +2,7 @@
 
 TOPDIR := ${.CURDIR}
 OBJPREFIX := ${HOME}/obj.${MACHINE}
-RLSDIR := ${TOPDIR}/freebsd-src/release
+RLSDIR := ${OBJPREFIX}/release
 BSDCONFIG := GENERIC
 BUILDROOT := ${OBJPREFIX}/buildroot
 AIRYX_VERSION != head -1 ${TOPDIR}/version
@@ -16,7 +16,7 @@ CORES := 4
 world: prep freebsd airyx release
 
 prep:
-	mkdir -p ${OBJPREFIX} ${TOPDIR}/dist ${BUILDROOT}
+	mkdir -p ${OBJPREFIX} ${TOPDIR}/dist ${BUILDROOT} ${RLSDIR}
 
 ${TOPDIR}/freebsd-src/sys/${MACHINE}/compile/${BSDCONFIG}: ${TOPDIR}/freebsd-src/sys/${MACHINE}/conf/${BSDCONFIG}
 	mkdir -p ${TOPDIR}/freebsd-src/sys/${MACHINE}/compile/${BSDCONFIG}
@@ -98,7 +98,7 @@ libobjc2: .PHONY
 	mkdir -p ${OBJPREFIX}/libobjc2
 	cd ${OBJPREFIX}/libobjc2; cmake \
 		-DCMAKE_C_FLAGS=" -D__AIRYX__ -DNO_SELECTOR_MISMATCH_WARNINGS" \
-		-DCMAKE_BUILD_TYPE=Release \
+		-DCMAKE_BUILD_TYPE=Debug \
 		-DCMAKE_INSTALL_PREFIX=/usr \
 		-DOLDABI_COMPAT=false -DLEGACY_COMPAT=false \
 		${TOPDIR}/libobjc2
@@ -127,7 +127,7 @@ _FRAMEWORK_TARGETS=${.ALLTARGETS:M*.framework}
 .endif
 frameworks: 
 	for fmwk in ${_FRAMEWORK_TARGETS}; do \
-		${MAKE} ${MKINCDIR} -C ${TOPDIR} $$fmwk; done
+		${MAKE} ${MKINCDIR} INSTALL="sudo install" -C ${TOPDIR} $$fmwk; done
 
 marshallheaders:
 	${MAKE} -C ${TOPDIR}/Foundation marshallheaders
@@ -218,7 +218,7 @@ DBusKit.framework:
 	cp -Rvf ${TOPDIR}/${.TARGET:R}/${.TARGET} ${BUILDROOT}/System/Library/Frameworks
 
 airyx-package:
-	tar cJ -C ${BUILDROOT} --gid 0 --uid 0 -f ${RLSDIR}/airyx.txz .
+	tar cJ -C ${BUILDROOT} --owner=0 --group=0 -f ${RLSDIR}/airyx.txz .
 
 ${TOPDIR}/ISO:
 	cd ${TOPDIR} && git clone https://github.com/mszoek/ISO.git

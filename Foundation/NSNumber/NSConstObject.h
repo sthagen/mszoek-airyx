@@ -39,11 +39,11 @@
 #define NS_DECLARE_CLASS_SYMBOL(className) extern const struct objc_class NS_CLASS_SYMBOL(className) __asm__(".objc_class_name_" #className)
 #endif // __LP64__
 #else
-#if defined(__FreeBSD__)
+#if defined(__FreeBSD__) || defined(__linux__)
 #define NS_DECLARE_CLASS_SYMBOL(className) extern const struct objc_class NS_CLASS_SYMBOL(className) __asm__("._OBJC_CLASS_" #className)
 #else
 #define NS_DECLARE_CLASS_SYMBOL(className) extern const struct objc_class NS_CLASS_SYMBOL(className)
-#endif // __FreeBSD__
+#endif // __FreeBSD__ || __linux__
 #endif
 
 /* NS_CONSTOBJ_DECL/NS_CONSTOBJ_DEF

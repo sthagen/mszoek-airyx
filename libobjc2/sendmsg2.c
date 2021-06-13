@@ -87,8 +87,8 @@ static IMP call_mismatch_hook(Class cls, SEL sel, struct objc_slot2 *slot)
 
 static
 // Uncomment for debugging
-//__attribute__((noinline))
-__attribute__((always_inline))
+__attribute__((noinline))
+//__attribute__((always_inline))
 struct objc_slot2 *objc_msg_lookup_internal(id *receiver, SEL selector, uint64_t *version)
 {
 	if (version)

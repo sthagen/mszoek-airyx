@@ -121,7 +121,11 @@ int recursivelyPopulateItemMap(NSMutableDictionary *itemMap, NSMenu *submenu, in
     layout = nil;
     menu = nil;
 
+#ifdef __FreeBSD__
     srandomdev();
+#else
+    srandom(time(NULL));
+#endif
     menuObjectPath = [NSString stringWithFormat:@"%@/%08x",DBUSMENU_PATH, random()];
 
     [connection registerHandlerForInterface:self interface:DBUSMENU_INTERFACE];

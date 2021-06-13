@@ -28,6 +28,11 @@ FOUNDATION_EXPORT void __attribute__ ((constructor)) libmain(void)
         abort();
     }
     
+    if(objc_registerSmallObjectClass_np(objc_getClass("NSConstantString_tiny"),4) == 0) {
+        fprintf(stderr, "Error during initialization: unable to register tiny string class");
+       abort();
+    }
+
     char buffer[READ_BUFFER_SIZE]; 
     int argCount = 0;    
 

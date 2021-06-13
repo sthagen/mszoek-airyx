@@ -2,10 +2,10 @@ FRAMEWORK_DIR=${FRAMEWORK}.framework
 FMWK_VERSION?=A
 NO_ROOT=yes
 
-UID != id -u
-.if defined(UID) && ${UID} != 0
-INSTALLFLAGS=-U
-.endif
+#UID != id -u
+#.if defined(UID) && ${UID} != 0
+#INSTALLFLAGS=-U
+#.endif
 
 .if defined(SRCS) && !empty(SRCS)
 LIBMODE?=0555
@@ -48,4 +48,4 @@ ${FRAMEWORK_DIR}:
 
 
 .include <bsd.lib.mk>
-.include <bsd.incs.mk>
+#.include <bsd.incs.mk>
