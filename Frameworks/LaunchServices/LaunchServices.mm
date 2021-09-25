@@ -28,11 +28,14 @@
 #import "LaunchServices.h"
 #import "LaunchServices_private.h"
 #import "UTTypes.h"
+#import "UTTypes-private.h"
 
 #include <sqlite3.h>
 #include <stdio.h>
 #include <QDBusConnection>
 #include <QDBusInterface>
+#include <QMimeDatabase>
+#include <QMimeType>
 
 #ifndef _XOPEN_SOURCE
 #define _XOPEN_SOURCE 500
@@ -80,7 +83,7 @@ static BOOL _LSCheckAndUpdateSchema()
 
     int currentSchema = 0;
     const char *query = "SELECT version FROM schema";
-    const int length = strlen(query);
+    size_t length = strlen(query);
     sqlite3_stmt *stmt;
     const char *tail;
 
@@ -96,6 +99,7 @@ static BOOL _LSCheckAndUpdateSchema()
     }
 
     currentSchema = sqlite3_column_int(stmt, 0);
+    sqlite3_finalize(stmt);
 
     // Iterate the schema updates until we are at the latest
     while(currentSchema < desiredSchema) {
@@ -104,10 +108,7 @@ static BOOL _LSCheckAndUpdateSchema()
         if(sqlPath == nil) {
     	    NSLog(@"ERROR: cannot find %@.sql to update launchservices.db schema", schemaFile);
         } else {
-            sqlite3_stmt *stmt;
-            const char *tail;
             FILE *sql = fopen([sqlPath UTF8String], "r");
-	        size_t length;
 	        char *line = fgetln(sql, &length);
 
         	while(length > 0) {
@@ -270,8 +271,10 @@ OSStatus LSFindAppsForUTI(NSString *uti, NSMutableArray **outAppURLs)
     }
 
     int rc = sqlite3_step(stmt);
-    if(rc != SQLITE_ROW)
+    if(rc != SQLITE_ROW) {
+        sqlite3_finalize(stmt);
         return kLSApplicationNotFoundErr;
+    }
 
     for(; rc == SQLITE_ROW; rc = sqlite3_step(stmt)) {
         NSString *url = [NSString stringWithCString:(const char *)sqlite3_column_text(stmt, 0)];
@@ -290,6 +293,8 @@ static BOOL _LSAddRecordToDatabase(const LSAppRecord *appRecord, BOOL isUpdate) 
         return false; // FIXME: log error somewhere
     }
     
+    sqlite3_busy_timeout(pDB, 1000);
+
     const char *query;
     if(isUpdate)
         query = "UPDATE applications SET basename=?2, version=?3, apprecord=?4, bundleid=?5 WHERE url=?1";
@@ -305,7 +310,7 @@ static BOOL _LSAddRecordToDatabase(const LSAppRecord *appRecord, BOOL isUpdate) 
     }
 
     NSString *bundleID = [NSString new];
-    NSBundle *b = [NSBundle bundleWithPath:[[appRecord URL] absoluteString]];
+    NSBundle *b = [NSBundle bundleWithPath:[[appRecord URL] path]];
     if(b)
         bundleID = [b bundleIdentifier];
 
@@ -321,10 +326,13 @@ static BOOL _LSAddRecordToDatabase(const LSAppRecord *appRecord, BOOL isUpdate) 
         return false;
     }
 
-    if(sqlite3_step(stmt) != SQLITE_DONE)
-        return false;
-
+    int rc = sqlite3_step(stmt);
     sqlite3_finalize(stmt);
+
+    if(rc != SQLITE_DONE) {
+        sqlite3_close(pDB);
+        return false;
+    }
 
     query = "DELETE FROM typemap WHERE application = ?";
     length = strlen(query);
@@ -419,8 +427,8 @@ static void PostXEvent(Display *display, Window window, Atom messageType, long d
 void LSRevealInFiler(CFArrayRef inItemURLs)
 {
     QDBusConnection dbus = QDBusConnection::sessionBus();
-    QDBusInterface filerIface(QStringLiteral("org.filer.Filer"),
-        QStringLiteral("/Application"), "", dbus);
+    QDBusInterface filerIface(QStringLiteral("org.freedesktop.FileManager1"),
+        QStringLiteral("/org/freedesktop/FileManager1"), "", dbus);
     if(filerIface.isValid()) {
         // we need to convert the CFArray into a QList in order to call DBus
         // this sucks. FIXME: maybe use DBusKit instead?
@@ -453,6 +461,10 @@ static void _LSCheckAndHandleLaunchFlags(NSTask *task, LSLaunchFlags launchFlags
         XGetInputFocus(display, &oldWindow, &oldRevert);
     }
 
+    // we may have already dup()'d other descriptors to 0,1,2 in `open`.
+    [task setStandardInput:[[NSFileHandle alloc] initWithFileDescriptor:0]];
+    [task setStandardOutput:[[NSFileHandle alloc] initWithFileDescriptor:1]];
+    [task setStandardError:[[NSFileHandle alloc] initWithFileDescriptor:2]];
     [task launch];
 
     int times = 100000;
@@ -580,10 +592,10 @@ static OSStatus _LSOpenAllWithSpecifiedApp(const LSLaunchURLSpec *inLaunchSpec, 
             return 0;
         }
 
-	NSEnumerator *items = [(NSArray *)inLaunchSpec->itemURLs objectEnumerator];
+    NSEnumerator *items = [(NSArray *)inLaunchSpec->itemURLs objectEnumerator];
         BOOL found = NO;
 
-	while(NSURL *item = [items nextObject]) {
+    while(NSURL *item = [items nextObject]) {
             NSMutableArray *copyargs = args;
             for(int i=0; i<[copyargs count]; ++i) {
                 if([[copyargs objectAtIndex:i] caseInsensitiveCompare:@"%U"] == NSOrderedSame) {
@@ -654,8 +666,8 @@ Boolean LSIsAppDir(CFURLRef cfurl)
        [[url pathExtension] caseInsensitiveCompare:@"appdir"] == NSOrderedSame) {
         NSFileManager *fm = [NSFileManager defaultManager];
         NSString *appRunPath = [[url URLByAppendingPathComponent:@"AppRun"] path];
-	if([fm fileExistsAtPath:appRunPath] && [fm isExecutableFileAtPath:appRunPath])
-	    return YES;
+    if([fm fileExistsAtPath:appRunPath] && [fm isExecutableFileAtPath:appRunPath])
+        return YES;
     }
     return NO;
 }
@@ -679,9 +691,26 @@ OSStatus LSOpenFromURLSpec(const LSLaunchURLSpec *inLaunchSpec, CFURLRef _Nullab
 {
     _LSInitializeDatabase();
 
+    CFArrayRef taskArgs = NULL;
+    CFDictionaryRef taskEnv = (CFDictionaryRef)[[NSPlatform currentPlatform] environment];
+
+    if(inLaunchSpec->launchFlags & kLSALaunchTaskEnvIsValid)
+        taskEnv = inLaunchSpec->taskEnv;
+
+    if(inLaunchSpec->launchFlags & kLSALaunchTaskArgsIsValid)
+        taskArgs = inLaunchSpec->taskArgs;
+
     if(inLaunchSpec->appURL) {
         // We are launching this specific application which must be a file URL
-        return _LSOpenAllWithSpecifiedApp(inLaunchSpec, outLaunchedURL);
+        // Guard against bad data in inLaunchSpec :)
+        LSLaunchURLSpec spec;
+        memset(&spec, 0, sizeof(spec));
+        spec.appURL = inLaunchSpec->appURL;
+        spec.itemURLs = inLaunchSpec->itemURLs;
+        spec.launchFlags = inLaunchSpec->launchFlags;
+        spec.taskArgs = taskArgs;
+        spec.taskEnv = taskEnv;
+        return _LSOpenAllWithSpecifiedApp(&spec, outLaunchedURL);
     }
 
     // We are opening one or more files or URLs with their preferred apps
@@ -696,34 +725,67 @@ OSStatus LSOpenFromURLSpec(const LSLaunchURLSpec *inLaunchSpec, CFURLRef _Nullab
     while(item = [items nextObject]) {
         if(LSIsNSBundle((CFURLRef)item)) {
             LSLaunchURLSpec spec;
-	    memset(&spec, 0, sizeof(spec));
-	    spec.appURL = (CFURLRef)item;
-	    spec.itemURLs = NULL;
-	    spec.launchFlags = inLaunchSpec->launchFlags;
-            spec.taskArgs = inLaunchSpec->taskArgs;
-            spec.taskEnv = inLaunchSpec->taskEnv;
-	    _LSOpenAllWithSpecifiedApp(&spec, NULL);
+            memset(&spec, 0, sizeof(spec));
+            spec.appURL = (CFURLRef)item;
+            spec.itemURLs = NULL;
+            spec.launchFlags = inLaunchSpec->launchFlags;
+            spec.taskArgs = taskArgs;
+            spec.taskEnv = taskEnv;
+            _LSOpenAllWithSpecifiedApp(&spec, NULL);
         } else if(LSIsAppDir((CFURLRef)item)) {
             LSLaunchURLSpec spec;
-	    memset(&spec, 0, sizeof(spec));
-	    spec.appURL = (CFURLRef)([item URLByAppendingPathComponent:@"AppRun"]);
-	    spec.itemURLs = NULL;
-	    spec.launchFlags = inLaunchSpec->launchFlags;
-            spec.taskArgs = inLaunchSpec->taskArgs;
-            spec.taskEnv = inLaunchSpec->taskEnv;
-	    _LSOpenAllWithSpecifiedApp(&spec, NULL);
+            memset(&spec, 0, sizeof(spec));
+            spec.appURL = (CFURLRef)([item URLByAppendingPathComponent:@"AppRun"]);
+            spec.itemURLs = NULL;
+            spec.launchFlags = inLaunchSpec->launchFlags;
+            spec.taskArgs = taskArgs;
+            spec.taskEnv = taskEnv;
+            _LSOpenAllWithSpecifiedApp(&spec, NULL);
         } else {
+            NSString *uti = nil;
+            if([[item pathExtension] isEqualToString:@""] == NO)
+                uti = (NSString *)UTTypeCreatePreferredIdentifierForTag(kUTTagClassFilenameExtension,
+                    (CFStringRef)[item pathExtension], NULL);
+
+            if(uti == nil) {
+                // We don't have a recognized extension. Try to identify by mime type.
+                QMimeDatabase mimedb;
+                QMimeType mimetype = mimedb.mimeTypeForFile(QString::fromUtf8([[item path] UTF8String]));
+                QStringList parents(mimetype.name());
+                parents.append(mimetype.parentMimeTypes());
+
+                for(QString s : parents) {
+                    NSString *mimestring = [NSString stringWithCString:s.toUtf8()];
+                    uti = (NSString *)UTTypeCreatePreferredIdentifierForTag(kUTTagClassMIMEType,
+                        (CFStringRef)mimestring, NULL);
+                    if(uti)
+                        break;
+                }
+            }
+
+            if(uti == nil)
+                return kLSApplicationNotFoundErr;
+
             NSMutableArray *appCandidates = [NSMutableArray arrayWithCapacity:6];
-	    NSString *uti = (NSString *)UTTypeCreatePreferredIdentifierForTag(kUTTagClassFilenameExtension,
-	    	(CFStringRef)[item pathExtension], NULL); 
-            if(LSFindAppsForUTI(uti, &appCandidates) == 0) {
+            NSMutableArray *conforms = [NSMutableArray arrayWithCapacity:20];
+
+            [conforms addObject:uti];
+            for(int x=0; x<[conforms count]; ++x) {
+                NSString *uti = [conforms objectAtIndex:x];
+                [conforms addObjectsFromArray:(NSArray*)UTTypeCopyConformsTo((CFStringRef)uti)];
+            }
+
+            int rc = -1;
+            for(int x=0; x<[conforms count] && (rc = LSFindAppsForUTI([conforms objectAtIndex:x], &appCandidates)) != 0; )
+                ++x;
+            if(rc == 0) {
                 LSLaunchURLSpec spec;
-	        memset(&spec, 0, sizeof(spec));
+                memset(&spec, 0, sizeof(spec));
                 spec.appURL = (CFURLRef)[[appCandidates firstObject] copy];
                 spec.itemURLs = (CFArrayRef)[NSArray arrayWithObject:item];
                 spec.launchFlags = inLaunchSpec->launchFlags;
-                spec.taskArgs = inLaunchSpec->taskArgs;
-                spec.taskEnv = inLaunchSpec->taskEnv;
+                spec.taskArgs = taskArgs;
+                spec.taskEnv = taskEnv;
                 _LSOpenAllWithSpecifiedApp(&spec, NULL);
             }
         }    

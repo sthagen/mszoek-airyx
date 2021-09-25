@@ -72,7 +72,7 @@ int main(int argc, const char **argv)
     spec.itemURLs = NULL;
     spec.asyncRefCon = 0;
     spec.passThruParams = 0;
-    spec.launchFlags = kLSLaunchDefaults;
+    spec.launchFlags = kLSLaunchDefaults|kLSALaunchTaskEnvIsValid;
 
     while(arg = [args nextObject]) {
         // -a, -b, -e, -t, -f and -R are mutually exclusive
@@ -121,6 +121,7 @@ int main(int argc, const char **argv)
             ++here;
             NSRange r = NSMakeRange(here, (argc - here));
             taskArgs = [argv_ subarrayWithRange:r];
+            spec.launchFlags |= kLSALaunchTaskArgsIsValid;
             break;
         } else if([arg isEqualToString:@"--env"]) {
             NSString *var = [args nextObject];
@@ -148,6 +149,9 @@ int main(int argc, const char **argv)
                 if(![arg isAbsolutePath])
                     arg = [cwd stringByAppendingPathComponent:arg];
                 url = [NSURL fileURLWithPath:arg];
+                // some apps can't handle a local file URL with 'localhost'
+                if([[url host] isEqualToString:@"localhost"])
+                    url = [[NSURL alloc] initWithScheme:[url scheme] host:nil path:[@"//" stringByAppendingString:[url path]]];
             }
             [itemURLs addObject:url];
         }
@@ -160,6 +164,9 @@ int main(int argc, const char **argv)
         return 0;
     }
 
+    close(0);
+    close(1);
+    close(2);
     if(stdinPipe)
         openInputPipe(stdinPipe);
     if(stdoutPipe)
@@ -171,7 +178,25 @@ int main(int argc, const char **argv)
     spec.taskArgs = (CFArrayRef)taskArgs;
     spec.taskEnv = (CFDictionaryRef)taskEnv;
 
-    return LSOpenFromURLSpec(&spec, NULL);
+    OSStatus rc = LSOpenFromURLSpec(&spec, NULL);
+    switch(rc) {
+    case kLSServerCommunicationErr:
+        fprintf(stderr, "An error occurred communicating with the LaunchServices database\n");
+        break;
+    case kLSApplicationNotFoundErr:
+        fprintf(stderr, "Unable to find a suitable application\n");
+        break;
+    case kLSDataErr:
+        fprintf(stderr, "Data format error\n");
+        break;
+    case kLSNoExecutableErr:
+        fprintf(stderr, "Application is not executable\n");
+        break;
+    case kLSUnknownErr:
+        fprintf(stderr, "An unknown error occurred\n");
+        break;
+    }
+    return rc;
 }
 
 void unimplemented(NSString *msg)
@@ -285,7 +310,7 @@ void openInputPipe(NSString *path)
 
 void openOutputPipe(NSString *path, int fd)
 {
-    int sink = open([path UTF8String], O_WRONLY);
+    int sink = open([path UTF8String], O_CREAT|O_WRONLY, 0644);
     if(sink< 0) {
         fprintf(stderr, "Unable to open %s for output\n", [path UTF8String]);
         exit(1);
