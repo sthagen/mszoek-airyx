@@ -1,6 +1,19 @@
 THISDIR:= ${.CURDIR}
+CIRRUS_BUILD_ID?= local
 
-all: .PHONY clean frameworks
+all: .PHONY clean frameworks package
+package:
+	rm -rf /tmp/meta
+	mkdir -p /tmp/meta
+	cd ${BUILDROOT}; find ./System/Library/Frameworks -not -type d | \
+	  sed 's@^\.@@' > /tmp/meta/pkg-plist
+	sed "s/%%VERSION%%/${AIRYX_VERSION}_${CIRRUS_BUILD_ID}/" < +MANIFEST \
+	  > /tmp/meta/+MANIFEST
+	mkdir -p ${TOPDIR}/dist
+	pkg create -o ${TOPDIR}/dist/ -r ${BUILDROOT} -m /tmp/meta \
+	  --plist /tmp/meta/pkg-plist
+	ls -l ${TOPDIR}/dist
+
 clean:
 	rm -rf ${BUILDROOT}/System/Library/Frameworks/*.framework
 	for fmwk in ${.ALLTARGETS:M*.framework:R}; do \
@@ -53,7 +66,7 @@ CFNetwork.framework:
 	${MAKE} -C ${THISDIR}/CFNetwork BUILDROOT=${BUILDROOT}
 	cp -Rvf ${THISDIR}/${.TARGET:R}/${.TARGET} ${BUILDROOT}/System/Library/Frameworks
 
-Foundation.framework: libobjc2 libunwind
+Foundation.framework: libobjc2 
 	rm -rf ${THISDIR}/Foundation/${.TARGET}
 	${MAKE} -C ${THISDIR}/Foundation BUILDROOT=${BUILDROOT} clean build
 	cp -Rvf ${THISDIR}/${.TARGET:R}/${.TARGET} ${BUILDROOT}/System/Library/Frameworks
@@ -109,20 +122,22 @@ QuartzCore.framework:
 	${MAKE} -C ${THISDIR}/QuartzCore BUILDROOT=${BUILDROOT}
 	cp -Rvf ${THISDIR}/${.TARGET:R}/${.TARGET} ${BUILDROOT}/System/Library/Frameworks
 
+
 AppKit.framework:
 	rm -rf ${THISDIR}/AppKit/${.TARGET}
 	${MAKE} -C ${THISDIR}/AppKit BUILDROOT=${BUILDROOT} clean build
 	cp -Rvf ${THISDIR}/${.TARGET:R}/${.TARGET} ${BUILDROOT}/System/Library/Frameworks
 
+DBusKit.framework:
+	rm -rf ${THISDIR}/DBusKit/${.TARGET}
+	${MAKE} -C ${THISDIR}/DBusKit BUILDROOT=${BUILDROOT} clean build
+	cp -Rvf ${THISDIR}/${.TARGET:R}/${.TARGET} ${BUILDROOT}/System/Library/Frameworks
+
+
 Cocoa.framework:
 	rm -rf ${THISDIR}/Cocoa/${.TARGET}
 	${MAKE} -C ${THISDIR}/Cocoa BUILDROOT=${BUILDROOT} clean
 	${MAKE} -C ${THISDIR}/Cocoa BUILDROOT=${BUILDROOT}
-	cp -Rvf ${THISDIR}/${.TARGET:R}/${.TARGET} ${BUILDROOT}/System/Library/Frameworks
-
-DBusKit.framework:
-	rm -rf ${THISDIR}/DBusKit/${.TARGET}
-	${MAKE} -C ${THISDIR}/DBusKit BUILDROOT=${BUILDROOT} clean build
 	cp -Rvf ${THISDIR}/${.TARGET:R}/${.TARGET} ${BUILDROOT}/System/Library/Frameworks
 
 LaunchServices.framework:
