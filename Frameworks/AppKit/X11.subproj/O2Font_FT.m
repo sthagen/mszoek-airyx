@@ -55,6 +55,7 @@ FcConfig *O2FontSharedFontConfig() {
 
 +(NSString*)filenameForPattern:(NSString *)pattern {
    int i;
+   pattern = [self nativeFontNameForPostscriptName:pattern];
    FcPattern *pat=FcNameParse((unsigned char*)[pattern UTF8String]);
 
    FcObjectSet *props=FcObjectSetBuild(FC_FILE, NULL);
@@ -72,7 +73,6 @@ FcConfig *O2FontSharedFontConfig() {
    FcPatternDestroy(pat);
    FcObjectSetDestroy(props);
    FcFontSetDestroy(set);
-   
    return ret;
 }
 
@@ -84,15 +84,7 @@ FcConfig *O2FontSharedFontConfig() {
     filename=[isa filenameForPattern:@""];
     
     if(filename==nil) {
-#if defined(__AIRYX__)
-      filename=@"/System/Library/Fonts/NimbusSans-Regular.ttf";
-#else
-#ifdef LINUX
-      filename=@"/usr/share/fonts/truetype/freefont/FreeSans.ttf";
-#else
-      filename=@"/System/Library/Fonts/HelveticaNeue.ttc";
-#endif
-#endif
+      filename=@"/System/Library/Fonts/TTF/NimbusSans-Regular.ttf";
     }
    }
       
@@ -155,19 +147,55 @@ FcConfig *O2FontSharedFontConfig() {
 
 -(NSCharacterSet *)coveredCharacterSet {
     if(_coveredCharSet == nil) {
-		NSMutableCharacterSet *set = [[NSMutableCharacterSet alloc] init];
-		uint32_t code, first, last, index;
+        NSMutableCharacterSet *set = [[NSMutableCharacterSet alloc] init];
+        uint32_t code, first, last, index;
 
-		code = first = FT_Get_First_Char(_face, &index);
-      while(index != 0) {
-         last = code;
-         code = FT_Get_Next_Char(_face, code, &index);
- 		}
-      // FIXME: This should create a range for each contiguous block of glyphs
-      [set addCharactersInRange: NSMakeRange(first, last - first)];
-		_coveredCharSet = set;
-	}
-	return _coveredCharSet;
+        code = first = FT_Get_First_Char(_face, &index);
+        while(index != 0) {
+            last = code;
+            code = FT_Get_Next_Char(_face, code, &index);
+            if(code > (last+1)) {
+                [set addCharactersInRange:NSMakeRange(first, last - first)];
+                first = code;
+            }
+        }
+        [set addCharactersInRange: NSMakeRange(first, last - first)];
+        _coveredCharSet = set;
+    }
+    return _coveredCharSet;
+}
+
+@end
+
+@implementation O2Font(FT)
+
++ (NSString *)nativeFontNameForPostscriptName:(NSString *)name
+{
+    if([name rangeOfString:@"-"].length == NSNotFound)
+        return [NSString stringWithFormat:@"%@:style=Regular", name];
+    return [name stringByReplacingOccurrencesOfString:@"-" withString:@":style="];
+}
+
++ (NSString *)postscriptNameForNativeName:(NSString *)name
+{
+	return [[name stringByReplacingOccurrencesOfString:@":style="
+        withString:@"-"] stringByReplacingOccurrencesOfString:@"-Regular"
+        withString:@""];
+}
+
++ (NSString *)postscriptNameForDisplayName:(NSString *)name
+{
+	return name;
+}
+
++ (NSString *)displayNameForPostscriptName:(NSString *)name
+{
+	return name;
+}
+
++ (NSString *)postscriptNameForFontName:(NSString *)name
+{
+	return name;
 }
 
 @end
