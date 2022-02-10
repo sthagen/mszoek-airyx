@@ -1,4 +1,4 @@
-.include <internal/framework.common.mk>
+.include "../framework.common.mk"
 
 FRAMEWORK=CoreData
 SRCS= \
@@ -55,4 +55,10 @@ NSXMLPersistentStore.h
 RESOURCES=Info.plist English.lproj
 CFLAGS+= ${FMWK_CFLAGS} -I.. -I../libobjc2 -I../Foundation/Headers
 
+_install-hook:
+	rm -rf ${BUILDROOT}/System/Library/Frameworks/${FRAMEWORK}.framework
+	cp -av ${.CURDIR}/${FRAMEWORK}.framework ${BUILDROOT}/System/Library/Frameworks/
+
 .include <airyx.framework.mk>
+
+installresources: _install-hook

@@ -1,4 +1,4 @@
-.include <internal/framework.common.mk>
+.include "../framework.common.mk"
 
 FRAMEWORK=QuartzCore
 SRCS= \
@@ -60,8 +60,14 @@ INCS= \
 	QuartzCore.h 
 
 RESOURCES=Info.plist English.lproj
-CFLAGS+= ${FMWK_CFLAGS} -I.. -I../OpenGL/include -I../libobjc2 -I../Foundation/Headers
+CFLAGS+= ${FMWK_CFLAGS} -I${TOPDIR}/Frameworks -I${.CURDIR}/../OpenGL/include -I${.CURDIR}/../Foundation/Headers -I${.CURDIR}/../AppKit/Headers
 LDFLAGS+= ${FMWK_LDFLAGS} -L${BUILDROOT}/System/Library/Frameworks/OpenGL.framework \
 	-lOpenGL -lGL -Wl,-R/System/Library/Frameworks/OpenGL.framework/Versions/A
 
+_install-hook:
+	rm -rf ${BUILDROOT}/System/Library/Frameworks/${FRAMEWORK}.framework
+	cp -av ${.CURDIR}/${FRAMEWORK}.framework ${BUILDROOT}/System/Library/Frameworks/
+
 .include <airyx.framework.mk>
+
+installresources: _install-hook

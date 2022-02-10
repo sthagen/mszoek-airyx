@@ -1,4 +1,4 @@
-.include <internal/framework.common.mk>
+.include "../framework.common.mk"
 
 FRAMEWORK=CoreGraphics
 SRCS= \
@@ -66,8 +66,14 @@ INCS= \
 RESOURCES=Info.plist 
 CFLAGS+= ${FMWK_CFLAGS} -I../OpenGL/include -I.. -I../libobjc2 -I../Foundation/Headers
 LDFLAGS+= ${FMWK_LDFLAGS} -L${BUILDROOT}/System/Library/Frameworks/Onyx2D.framework \
-	-L${BUILDROOT}/System/Library/Frameworks/OpenGL.framework -lOnyx2D -lOpenGL -lGL \
+	-L${BUILDROOT}/System/Library/Frameworks/OpenGL.framework -lOnyx2D -lOpenGL -lGL -lm \
 	-Wl,-R/System/Library/Frameworks/Onyx2D.framework/Versions/A \
 	-Wl,-R/System/Library/Frameworks/OpenGL.framework/Versions/A
 
+_install-hook:
+	rm -rf ${BUILDROOT}/System/Library/Frameworks/${FRAMEWORK}.framework
+	cp -av ${.CURDIR}/${FRAMEWORK}.framework ${BUILDROOT}/System/Library/Frameworks/
+
 .include <airyx.framework.mk>
+
+installresources: _install-hook

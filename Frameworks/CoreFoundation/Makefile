@@ -1,4 +1,4 @@
-.include <internal/framework.common.mk>
+.include "../framework.common.mk"
 
 FRAMEWORK=CoreFoundation
 SRCS= \
@@ -84,7 +84,13 @@ INCS= \
 	CoreFoundation.h
 
 RESOURCES=Info.plist English.lproj
-CFLAGS+= ${FMWK_CFLAGS} -I.. -I../libobjc2 -I../Foundation/Headers \
+CFLAGS+= ${FMWK_CFLAGS} -I${.CURDIR}/.. -I../libobjc2 -I${.CURDIR}/../Foundation/Headers \
 	 -F${BUILDROOT}/System/Library/Frameworks -framework Foundation
 
+_install-hook:
+	rm -rf ${BUILDROOT}/System/Library/Frameworks/${FRAMEWORK}.framework
+	cp -av ${.CURDIR}/${FRAMEWORK}.framework ${BUILDROOT}/System/Library/Frameworks/
+
 .include <airyx.framework.mk>
+
+installresources: _install-hook

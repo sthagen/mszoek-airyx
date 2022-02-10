@@ -1,7 +1,7 @@
 /*
  * Airyx LaunchServices
  *
- * Copyright (C) 2021 Zoe Knox <zoe@pixin.net>
+ * Copyright (C) 2021-2022 Zoe Knox <zoe@pixin.net>
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -32,10 +32,15 @@
 
 #include <sqlite3.h>
 #include <stdio.h>
+#include <unistd.h>
 #include <QDBusConnection>
 #include <QDBusInterface>
 #include <QMimeDatabase>
 #include <QMimeType>
+
+#import <launch.h>
+#import <stdlib.h>
+#import <limits.h>
 
 #ifndef _XOPEN_SOURCE
 #define _XOPEN_SOURCE 500
@@ -47,25 +52,19 @@
 #define _NET_WM_STATE_ADD 1
 #define _NET_WM_STATE_TOGGLE 2
 
-NSString *LS_DATABASE = [[[NSPlatform currentPlatform] libraryDirectory] stringByAppendingString:@"/db/launchservices.db"];
-
-@interface LaunchServices: NSObject
-@end
-
 @implementation LaunchServices
++database {
+    static NSString *db = nil;
+
+    if(db == nil)
+        db = [NSString stringWithFormat:
+        @"/var/db/launchd/com.apple.launchd.peruser.%u/launchservices.db",
+        getuid()];
+    return db;
+}
 @end
-
-
-// FIXME: these should talk to a privileged service (maybe over DBus) but for now we'll
-// just manipulate some files. The service is /System/Library/CoreServices/launchservicesd
-// on macOS.
-// See https://developer.gnome.org/DBusApplicationLaunching/ and 
-// https://techbase.kde.org/Development/Tutorials/D-Bus/Autostart_Services
 
 // FIXME: which error code to return for each case is just a guess
-
-// FIXME: stuff to track per application:
-// - DBus activatable boolean
 
 //------------------------------------------------------------------------
 //    INTERNAL FUNCTIONS - DON'T USE. SEE BELOW FOR PUBLIC API
@@ -76,7 +75,7 @@ static BOOL _LSCheckAndUpdateSchema()
     const int desiredSchema = 4;
 
     sqlite3 *pDB = 0;
-    if(sqlite3_open([LS_DATABASE UTF8String], &pDB) != SQLITE_OK) {
+    if(sqlite3_open([[LaunchServices database] UTF8String], &pDB) != SQLITE_OK) {
         sqlite3_close(pDB);
         return false; // FIXME: log error somewhere
     }
@@ -132,13 +131,13 @@ static BOOL _LSCheckAndUpdateSchema()
 static BOOL _LSInitializeDatabase()
 {
     NSFileManager *fm = [NSFileManager defaultManager];
-    if([fm fileExistsAtPath:LS_DATABASE])
+    if([fm fileExistsAtPath:[LaunchServices database]])
         return _LSCheckAndUpdateSchema();
 
-    [fm createFileAtPath:LS_DATABASE contents:[NSData new] attributes:[NSDictionary new]];
+    [fm createFileAtPath:[LaunchServices database] contents:[NSData new] attributes:[NSDictionary new]];
 
     sqlite3 *pDB = 0;
-    if(sqlite3_open([LS_DATABASE UTF8String], &pDB) != SQLITE_OK) {
+    if(sqlite3_open([[LaunchServices database] UTF8String], &pDB) != SQLITE_OK) {
         sqlite3_close(pDB);
         return false; // FIXME: log error somewhere
     }
@@ -172,7 +171,7 @@ static BOOL _LSInitializeDatabase()
 BOOL LSFindRecordInDatabase(const NSURL *appURL, LSAppRecord **appRecord)
 {
     sqlite3 *pDB = 0;
-    if(sqlite3_open([LS_DATABASE UTF8String], &pDB) != SQLITE_OK) {
+    if(sqlite3_open([[LaunchServices database] UTF8String], &pDB) != SQLITE_OK) {
         sqlite3_close(pDB);
         return false; // FIXME: log error somewhere
     }
@@ -211,7 +210,7 @@ BOOL LSFindRecordInDatabase(const NSURL *appURL, LSAppRecord **appRecord)
 BOOL LSFindRecordInDatabaseByBundleID(const NSString *bundleID, LSAppRecord **appRecord)
 {
     sqlite3 *pDB = 0;
-    if(sqlite3_open([LS_DATABASE UTF8String], &pDB) != SQLITE_OK) {
+    if(sqlite3_open([[LaunchServices database] UTF8String], &pDB) != SQLITE_OK) {
         sqlite3_close(pDB);
         return false; // FIXME: log error somewhere
     }
@@ -249,7 +248,7 @@ BOOL LSFindRecordInDatabaseByBundleID(const NSString *bundleID, LSAppRecord **ap
 OSStatus LSFindAppsForUTI(NSString *uti, NSMutableArray **outAppURLs)
 {
     sqlite3 *pDB = 0;
-    if(sqlite3_open([LS_DATABASE UTF8String], &pDB) != SQLITE_OK) {
+    if(sqlite3_open([[LaunchServices database] UTF8String], &pDB) != SQLITE_OK) {
         sqlite3_close(pDB);
         return kLSServerCommunicationErr; // FIXME: log error somewhere
     }
@@ -288,7 +287,7 @@ OSStatus LSFindAppsForUTI(NSString *uti, NSMutableArray **outAppURLs)
 
 static BOOL _LSAddRecordToDatabase(const LSAppRecord *appRecord, BOOL isUpdate) {
     sqlite3 *pDB = 0;
-    if(sqlite3_open([LS_DATABASE UTF8String], &pDB) != SQLITE_OK) {
+    if(sqlite3_open([[LaunchServices database] UTF8String], &pDB) != SQLITE_OK) {
         sqlite3_close(pDB);
         return false; // FIXME: log error somewhere
     }
@@ -449,6 +448,12 @@ void LSRevealInFiler(CFArrayRef inItemURLs)
 
 static void _LSCheckAndHandleLaunchFlags(NSTask *task, LSLaunchFlags launchFlags)
 {
+    int _launchd = 0;
+
+    // Can I play with madness?
+    if(getenv("__LAUNCHD_FD") != NULL)
+        _launchd = strtoul(getenv("__LAUNCHD_FD"), NULL, 10);
+
     if(launchFlags & kLSLaunchNewInstance) {
         // FIXME: launch new instance of app
     }
@@ -462,10 +467,32 @@ static void _LSCheckAndHandleLaunchFlags(NSTask *task, LSLaunchFlags launchFlags
     }
 
     // we may have already dup()'d other descriptors to 0,1,2 in `open`.
-    [task setStandardInput:[[NSFileHandle alloc] initWithFileDescriptor:0]];
-    [task setStandardOutput:[[NSFileHandle alloc] initWithFileDescriptor:1]];
-    [task setStandardError:[[NSFileHandle alloc] initWithFileDescriptor:2]];
-    [task launch];
+    if(_launchd) {
+        launch_data_t job = launch_data_alloc(LAUNCH_DATA_DICTIONARY);
+        launch_data_t args = launch_data_alloc(LAUNCH_DATA_ARRAY);
+        launch_data_array_set_index(args, launch_data_new_string([[task launchPath]
+            UTF8String]), 0);
+        NSArray *ta = [task arguments];
+        for(int x = 0; x < [ta count]; ++x) {
+            launch_data_array_set_index(args, launch_data_new_string([[ta objectAtIndex:x]
+                UTF8String]), 1+x);
+        }
+        launch_data_dict_insert(job, args, LAUNCH_JOBKEY_PROGRAMARGUMENTS);
+        launch_data_dict_insert(job, launch_data_new_bool(true), LAUNCH_JOBKEY_RUNATLOAD);
+//        launch_data_dict_insert(job, launch_data_new_bool(true), LAUNCH_JOBKEY_ABANDONPROCESSGROUP);
+
+        NSString *label = [NSString stringWithFormat:@"task.%lx.%@", task,
+            [[task launchPath] lastPathComponent]];
+        launch_data_dict_insert(job, launch_data_new_string([label UTF8String]), LAUNCH_JOBKEY_LABEL);
+        launch_data_t request = launch_data_alloc(LAUNCH_DATA_DICTIONARY);
+        launch_data_dict_insert(request, job, LAUNCH_KEY_SUBMITJOB);
+        launch_data_t response = launch_msg(request);
+    } else {
+        [task setStandardInput:[[NSFileHandle alloc] initWithFileDescriptor:0]];
+        [task setStandardOutput:[[NSFileHandle alloc] initWithFileDescriptor:1]];
+        [task setStandardError:[[NSFileHandle alloc] initWithFileDescriptor:2]];
+        [task launch];
+    }
 
     int times = 100000;
     if(display) {

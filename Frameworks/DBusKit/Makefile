@@ -1,4 +1,4 @@
-.include <internal/framework.common.mk>
+.include "../framework.common.mk"
 
 FRAMEWORK=DBusKit
 SRCS= \
@@ -20,8 +20,6 @@ LDFLAGS+= -g ${FMWK_LDFLAGS} ${DBUS_LDFLAGS} \
 	  -L${BUILDROOT}/System/Library/Frameworks/CoreFoundation.framework/Versions/Current \
 	  -lFoundation -lCoreFoundation -lobjc -lm
 
-build: all copydbus
-
 copydbus:
 	rm -rf ${FRAMEWORK}.framework/Headers/dbus
 	rm -f ${FRAMEWORK}.framework/Versions/Current/libdbus-1.so*
@@ -31,4 +29,11 @@ copydbus:
 	rm -f ${FRAMEWORK}.framework/Headers/*.bak
 	ln -sf /usr/lib/libdbus-1.so* ${FRAMEWORK}.framework/Versions/Current/
 
+install-hook:
+	rm -rf ${BUILDROOT}/System/Library/Frameworks/${FRAMEWORK}.framework
+	cp -av ${.CURDIR}/${FRAMEWORK}.framework ${BUILDROOT}/System/Library/Frameworks/
+
 .include <airyx.framework.mk>
+
+all: copydbus
+installresources: install-hook

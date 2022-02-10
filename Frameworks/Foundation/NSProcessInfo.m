@@ -11,6 +11,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 #import <Foundation/NSPathUtilities.h>
 #import <Foundation/NSStringFormatter.h>
 #import <Foundation/NSRaise.h>
+#import <Foundation/NSDarwinString.h>
 #import <Foundation/NSString_cString.h>
 #import <Foundation/NSThread-Private.h>
 #import <Foundation/NSPlatform.h>
@@ -196,19 +197,17 @@ const char * const *NSProcessInfoArgv=NULL;
 
 @end
 
+int __NSConstantStringClassReference[24];
+
 FOUNDATION_EXPORT void __NSInitializeProcess(int argc,const char *argv[]) {
    NSProcessInfoArgc=argc;
    NSProcessInfoArgv=argv;
-#if !defined(GCC_RUNTIME_3)
-#if !defined(APPLE_RUNTIME_4)
+#if !defined(APPLE_RUNTIME_4) && !defined(__AIRYX__)
     OBJCInitializeProcess();
 #endif
-#ifdef __APPLE__
-    // init NSConstantString reference-tag (see http://lists.apple.com/archives/objc-language/2006/Jan/msg00013.html)
-    // only Darwin ppc!?
-    Class cls = objc_lookUpClass("NSConstantString");
-//    memcpy(&_NSConstantStringClassReference, cls, sizeof(_NSConstantStringClassReference));
-    cls = objc_lookUpClass("NSDarwinString");
+#if defined(__APPLE__) || defined(__AIRYX__)
+    Class cls = objc_getClass("__builtin_NSString");
+    memcpy(&__NSConstantStringClassReference, cls, sizeof(__NSConstantStringClassReference));
 
 #if __LP64__
     extern int __CFConstantStringClassReference[24];
@@ -216,11 +215,11 @@ FOUNDATION_EXPORT void __NSInitializeProcess(int argc,const char *argv[]) {
     extern int __CFConstantStringClassReference[12];
 #endif
 
+    cls = objc_getClass("NSDarwinString");
     memcpy(&__CFConstantStringClassReference, cls, sizeof(__CFConstantStringClassReference));
     
     // Override the compiler version of the class
     //objc_addClass(&_NSConstantStringClassReference);
-#endif
 #endif
 
 }

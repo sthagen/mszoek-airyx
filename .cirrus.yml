@@ -1,35 +1,57 @@
 compute_engine_instance:
-  image_project: freebsd-org-cloud-dev
-  image: family/freebsd-12-2
+  image_project: airyxos-images
+  image: airyxbuild-0-4-b6
   platform: freebsd
   cpu: 8
   memory: 16G
-  disk: 100
+  disk: 80
 
-# Build the Airyx system core
+
 airyx_task:
   timeout_in: 120m
   environment:
-    KEY: ENCRYPTED[f68765a53df76c1b9cd6d870e0054317f9cc517313bf6c56d0b094a1ad01e968a95e6328b37b53db7840d112ff165c46]
     PKG_CONFIG_PATH: /usr/libdata/pkgconfig:/usr/local/libdata/pkgconfig
-  script:
-    - fetch -o /tmp/base.txz https://dl.cloudsmith.io/public/airyx/core/raw/files/base.txz
-    - tar -C / -xf /tmp/base.txz --exclude=./var/empty --exclude=./usr/lib --exclude=./sbin/init --exclude=./lib/libthr.so.3 --exclude=./libcrypt.so.5 --exclude=./lib/libc.so.7 --exclude=./libexec/ld-elf.so.1 --exclude=./usr/bin/crontab --exclude=./usr/bin/su --exclude=./usr/bin/opiepasswd --exclude=./usr/bin/passwd --exclude=./usr/bin/opieinfo --exclude=./usr/bin/login --exclude=./usr/bin/chpass --exclude=./usr/lib/librt.so.1
-    - cp -afv mk/*.mk /usr/share/mk
-    - cp -fv etc/pkg/*.conf /etc/pkg/ && rm -fv /etc/pkg/FreeBSD.conf
-    - fetch -o /tmp/liblz4.pkg https://dl.cloudsmith.io/public/airyx/core/raw/files/liblz4-1.9.3,1.pkg
-    - tar -C / -xf /tmp/liblz4.pkg
-    - fetch -o /tmp/libarchive.pkg https://dl.cloudsmith.io/public/airyx/core/raw/files/libarchive-3.5.1,1.pkg
-    - tar -C / -xf /tmp/libarchive.pkg
-    - pkg update
+    KEY: ENCRYPTED[f68765a53df76c1b9cd6d870e0054317f9cc517313bf6c56d0b094a1ad01e968a95e6328b37b53db7840d112ff165c46]
+    SSHPASS: ENCRYPTED[c77c4f027217be24243c203da68e0a7428beb4e1b0a4b6e4693f19e79c7b6123accdd29fba3d8be8d939f4dcfa4e36a6]
+  clone_script: |
+    if [ -z "$CIRRUS_PR" ]; then
+      git clone --recursive --branch=$CIRRUS_BRANCH https://x-access-token:${CIRRUS_REPO_CLONE_TOKEN}@github.com/${CIRRUS_REPO_FULL_NAME}.git $CIRRUS_WORKING_DIR
+      git reset --hard $CIRRUS_CHANGE_IN_REPO
+    else
+      git clone --recursive https://x-access-token:${CIRRUS_REPO_CLONE_TOKEN}@github.com/${CIRRUS_REPO_FULL_NAME}.git $CIRRUS_WORKING_DIR
+      git fetch origin pull/$CIRRUS_PR/head:pull/$CIRRUS_PR
+      git reset --hard $CIRRUS_CHANGE_IN_REPO
+    fi
+  setup_script:
+    - rm -fv /etc/pkg/FreeBSD.conf
+    - cp -fv etc/pkg/Airyx.conf /etc/pkg/
+    - pkg-static install -yf pkg && pkg update
+    - pkg fetch -y -o /tmp binutils
+    - tar xvf /tmp/binutils-*.pkg -C / /usr/bin/as
+    - pkg install -fy python38 python3 py38-pip py38-setuptools
     - pkg install -y cmake jpeg-turbo openjpeg tiff png cairo fontconfig freetype2 libX11 libXext libXfixes libXdamage mesa-libs dbus pkgconf libqtxdg sqlite3 git-tiny qt5-buildtools qt5-qmake qt5-dbus qt5-linguisttools qt5-widgets qt5-x11extras qt5-dbus glib dbus-glib libffi libfm libfm-qt menu-cache gettext-runtime icu kf5-extra-cmake-modules lxqt-build-tools kf5-ki18n kf5-plasma-framework kf5-ktexteditor qt5-testlib gmake autoconf zip bash alsa-lib alsa-plugins
-    - fetch -o /tmp/openjdk-17.jdk.txz https://github.com/mszoek/airyx/releases/download/jdk-17.0.1/openjdk-17.0.1.jdk.txz
-    - mkdir -p /Library/Java/JavaVirtualMachines
-    - tar -C /Library/Java/JavaVirtualMachines -xf /tmp/openjdk-17.jdk.txz
-    - make prep airyx
+    - pip install --upgrade cloudsmith-cli
+  base_build_script:
+    - mkdir -p /usr/obj/$(pwd -P)
+    - make -j$(sysctl -n hw.ncpu) MK_LIB32=no buildworld buildkernel
+    - make -C release MK_LIB32=no NOSRC=true NOPORTS=true packagesystem
+    - cloudsmith push raw -k $KEY airyx/core --name base_${CIRRUS_BRANCH%/*}.txz /usr/obj/$(pwd -P)/$(uname -m).$(uname -m)/release/base.txz
+    - cloudsmith push raw -k $KEY airyx/core --name kernel_${CIRRUS_BRANCH%/*}.txz /usr/obj/$(pwd -P)/$(uname -m).$(uname -m)/release/kernel.txz
+  system_build_script:
+    - make -f Makefile.airyx prep
+    - cp -fv share/mk/* /usr/share/mk/
+    - make -f Makefile.airyx
     - rm -f dist/airyx.txz
-    - make airyx-package
-  only_if: $CIRRUS_BRANCH == 'main'
+    - make -f Makefile.airyx airyx-package
+  iso_script:
+    - pkg install -y sshpass bash
+    - ln -sf /usr/bin/bash /bin/bash
+    - cp -fv version.txt ISO/overlays/ramdisk/version
+    - mkdir -p /usr/local/furybsd/$(uname -m)/cache/$(head -1 version.txt)/base
+    - cp -fv /usr/obj/$(pwd -P)/$(uname -m).$(uname -m)/release/base.txz /usr/obj/$(pwd -P)/$(uname -m).$(uname -m)/release/kernel.txz ${CIRRUS_WORKING_DIR}/dist/airyx.txz /usr/local/furybsd/$(uname -m)/cache/$(head -1 version.txt)/base/
+    - cd ISO; AIRYX=${CIRRUS_WORKING_DIR} ./build.sh airyx airyxOS_$(head -1 ../version.txt)
+    - sshpass -e scp -o StrictHostKeyChecking=no ${CIRRUS_WORKING_DIR}/artifacts/*.iso* airyxos@pikachu.rvn.sh:nightly/
+  only_if: $CIRRUS_BRANCH == 'main' || $CIRRUS_BRANCH == 'staging'
   airyx_artifacts:
     path: dist/airyx.txz
   package_artifacts:

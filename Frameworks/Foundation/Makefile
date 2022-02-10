@@ -1,4 +1,4 @@
-.include <internal/framework.common.mk>
+.include "../framework.common.mk"
 
 FRAMEWORK=Foundation
 SRCS= \
@@ -106,6 +106,7 @@ SRCS= \
 ./NSKeyValueCoding/NSKeyPathObserver.m \
 ./NSPointerFunctions.m \
 ./NSOrthography.m \
+./NSString/NSDarwinString.m \
 ./NSString/NSStringUTF8.m \
 ./NSString/NSString_placeholder.m \
 ./NSString/NSMutableString.m \
@@ -687,12 +688,18 @@ LDFLAGS+= ${FMWK_LDFLAGS} \
 	  -lCFNetwork \
 	  -lobjc -lexecinfo -lpthread
 
-build: marshallheaders all
-	mv Foundation.framework/Resources/NSCharacterSet/*.bitmap Foundation.framework/Resources/
-	rmdir Foundation.framework/Resources/NSCharacterSet
-
-marshallheaders: .PHONY
+marshalheaders: .PHONY
 	mkdir -p Headers/Foundation
 	find ${.CURDIR} -name \*.h -exec cp -f {} Headers/Foundation \;
 
+_install-hook:
+	rm -rf ${BUILDROOT}/System/Library/Frameworks/${FRAMEWORK}.framework
+	mv ${.CURDIR}/Foundation.framework/Resources/NSCharacterSet/*.bitmap \
+		${.CURDIR}/Foundation.framework/Resources/
+	rmdir ${.CURDIR}/Foundation.framework/Resources/NSCharacterSet
+	cp -av ${.CURDIR}/${FRAMEWORK}.framework ${BUILDROOT}/System/Library/Frameworks/
+
 .include <airyx.framework.mk>
+
+all: marshalheaders
+post-resources: _install-hook
