@@ -376,8 +376,11 @@ device_fail:	if ((path->device->flags & CAM_DEV_UNCONFIGURED) == 0)
 		path->device->serial_num = (u_int8_t *)
 		    malloc(NVME_SERIAL_NUMBER_LENGTH + 1, M_CAMXPT, M_NOWAIT);
 		if (path->device->serial_num != NULL) {
-			cam_strvis(path->device->serial_num, nvme_cdata->sn,
-			    NVME_SERIAL_NUMBER_LENGTH, NVME_SERIAL_NUMBER_LENGTH + 1);
+			cam_strvis_flag(path->device->serial_num,
+			    nvme_cdata->sn, sizeof(nvme_cdata->sn),
+			    NVME_SERIAL_NUMBER_LENGTH + 1,
+			    CAM_STRVIS_FLAG_NONASCII_SPC);
+
 			path->device->serial_num_len =
 			    strlen(path->device->serial_num);
 		}
@@ -630,6 +633,7 @@ nvme_device_transport(struct cam_path *path)
 	path->device->protocol_version = cpi.protocol_version;
 
 	/* Tell the controller what we think */
+	memset(&cts, 0, sizeof(cts));
 	xpt_setup_ccb(&cts.ccb_h, path, CAM_PRIORITY_NONE);
 	cts.ccb_h.func_code = XPT_SET_TRAN_SETTINGS;
 	cts.type = CTS_TYPE_CURRENT_SETTINGS;
@@ -791,6 +795,7 @@ nvme_announce_periph(struct cam_periph *periph)
 	cam_periph_assert(periph, MA_OWNED);
 
 	/* Ask the SIM for connection details */
+	memset(&cts, 0, sizeof(cts));
 	xpt_setup_ccb(&cts.ccb_h, path, CAM_PRIORITY_NORMAL);
 	cts.ccb_h.func_code = XPT_GET_TRAN_SETTINGS;
 	cts.type = CTS_TYPE_CURRENT_SETTINGS;

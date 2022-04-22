@@ -932,6 +932,8 @@ bridge_ioctl(struct ifnet *ifp, u_long cmd, caddr_t data)
 		break;
 
 	case SIOCSIFMTU:
+		oldmtu = sc->sc_ifp->if_mtu;
+
 		if (ifr->ifr_mtu < 576) {
 			error = EINVAL;
 			break;
@@ -941,17 +943,27 @@ bridge_ioctl(struct ifnet *ifp, u_long cmd, caddr_t data)
 			break;
 		}
 		CK_LIST_FOREACH(bif, &sc->sc_iflist, bif_next) {
-			if (bif->bif_ifp->if_mtu != ifr->ifr_mtu) {
-				log(LOG_NOTICE, "%s: invalid MTU: %u(%s)"
-				    " != %d\n", sc->sc_ifp->if_xname,
-				    bif->bif_ifp->if_mtu,
-				    bif->bif_ifp->if_xname, ifr->ifr_mtu);
+			error = (*bif->bif_ifp->if_ioctl)(bif->bif_ifp,
+			    SIOCSIFMTU, (caddr_t)ifr);
+			if (error != 0) {
+				log(LOG_NOTICE, "%s: invalid MTU: %u for"
+				    " member %s\n", sc->sc_ifp->if_xname,
+				    ifr->ifr_mtu,
+				    bif->bif_ifp->if_xname);
 				error = EINVAL;
 				break;
 			}
 		}
-		if (!error)
+		if (error) {
+			/* Restore the previous MTU on all member interfaces. */
+			ifr->ifr_mtu = oldmtu;
+			CK_LIST_FOREACH(bif, &sc->sc_iflist, bif_next) {
+				(*bif->bif_ifp->if_ioctl)(bif->bif_ifp,
+				    SIOCSIFMTU, (caddr_t)ifr);
+			}
+		} else {
 			sc->sc_ifp->if_mtu = ifr->ifr_mtu;
+		}
 		break;
 	default:
 		/*
@@ -2164,7 +2176,7 @@ bridge_output(struct ifnet *ifp, struct mbuf *m, struct sockaddr *sa,
 				used = 1;
 				mc = m;
 			} else {
-				mc = m_copypacket(m, M_NOWAIT);
+				mc = m_dup(m, M_NOWAIT);
 				if (mc == NULL) {
 					if_inc_counter(bifp, IFCOUNTER_OERRORS, 1);
 					continue;
@@ -2725,7 +2737,7 @@ bridge_span(struct bridge_softc *sc, struct mbuf *m)
 		if ((dst_if->if_drv_flags & IFF_DRV_RUNNING) == 0)
 			continue;
 
-		mc = m_copypacket(m, M_NOWAIT);
+		mc = m_dup(m, M_NOWAIT);
 		if (mc == NULL) {
 			if_inc_counter(sc->sc_ifp, IFCOUNTER_OERRORS, 1);
 			continue;

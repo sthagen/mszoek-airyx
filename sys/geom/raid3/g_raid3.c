@@ -774,7 +774,7 @@ g_raid3_fill_metadata(struct g_raid3_disk *disk, struct g_raid3_metadata *md)
 void
 g_raid3_update_metadata(struct g_raid3_disk *disk)
 {
-	struct g_raid3_softc *sc;
+	struct g_raid3_softc *sc __diagused;
 	struct g_raid3_metadata md;
 	int error;
 
@@ -1380,7 +1380,7 @@ g_raid3_flush(struct g_raid3_softc *sc, struct bio *bp)
 {
 	struct bio_queue_head queue;
 	struct g_raid3_disk *disk;
-	struct g_consumer *cp;
+	struct g_consumer *cp __diagused;
 	struct bio *cbp;
 	u_int i;
 
@@ -2181,7 +2181,7 @@ g_raid3_sync_start(struct g_raid3_softc *sc)
 	struct g_raid3_disk *disk;
 	struct g_consumer *cp;
 	struct bio *bp;
-	int error;
+	int error __diagused;
 	u_int n;
 
 	g_topology_assert_not();
@@ -3310,6 +3310,7 @@ g_raid3_taste(struct g_class *mp, struct g_provider *pp, int flags __unused)
 	/* This orphan function should be never called. */
 	gp->orphan = g_raid3_taste_orphan;
 	cp = g_new_consumer(gp);
+	cp->flags |= G_CF_DIRECT_SEND | G_CF_DIRECT_RECEIVE;
 	error = g_attach(cp, pp);
 	if (error == 0) {
 		error = g_raid3_read_metadata(cp, &md);

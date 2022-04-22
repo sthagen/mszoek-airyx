@@ -355,12 +355,12 @@ msdosfs_mount(struct mount *mp)
 	 */
 	if (vfs_getopt(mp->mnt_optnew, "from", (void **)&from, NULL))
 		return (EINVAL);
-	NDINIT(&ndp, LOOKUP, FOLLOW | LOCKLEAF, UIO_SYSSPACE, from, td);
+	NDINIT(&ndp, LOOKUP, FOLLOW | LOCKLEAF, UIO_SYSSPACE, from);
 	error = namei(&ndp);
 	if (error)
 		return (error);
 	devvp = ndp.ni_vp;
-	NDFREE(&ndp, NDF_ONLY_PNBUF);
+	NDFREE_PNBUF(&ndp);
 
 	if (!vn_isdisk_error(devvp, &error)) {
 		vput(devvp);
@@ -577,7 +577,6 @@ mountmsdosfs(struct vnode *odevvp, struct mount *mp)
 		goto error_exit;
 	}
 
-	pmp->pm_HugeSectors *= pmp->pm_BlkPerSec;
 	if ((off_t)pmp->pm_HugeSectors * pmp->pm_BytesPerSec <
 	    pmp->pm_HugeSectors /* overflow */ ||
 	    (off_t)pmp->pm_HugeSectors * pmp->pm_BytesPerSec >
@@ -586,6 +585,7 @@ mountmsdosfs(struct vnode *odevvp, struct mount *mp)
 		goto error_exit;
 	}
 
+	pmp->pm_HugeSectors *= pmp->pm_BlkPerSec;
 	pmp->pm_HiddenSects *= pmp->pm_BlkPerSec;	/* XXX not used? */
 	pmp->pm_FATsecs     *= pmp->pm_BlkPerSec;
 	SecPerClust         *= pmp->pm_BlkPerSec;

@@ -50,6 +50,8 @@
 #define MLX5_QCOUNTER_SETS_NETDEV 64
 #define MLX5_MAX_NUMBER_OF_VFS 128
 
+#define MLX5_INVALID_QUEUE_HANDLE 0xffffffff
+
 enum {
 	MLX5_BOARD_ID_LEN = 64,
 	MLX5_MAX_NAME_LEN = 16,
@@ -388,9 +390,7 @@ struct mlx5_core_psv {
 struct mlx5_core_sig_ctx {
 	struct mlx5_core_psv	psv_memory;
 	struct mlx5_core_psv	psv_wire;
-#if (__FreeBSD_version >= 1100000)
 	struct ib_sig_err       err_item;
-#endif
 	bool			sig_status_checked;
 	bool			sig_err_exists;
 	u32			sigerr_count;
@@ -399,7 +399,7 @@ struct mlx5_core_sig_ctx {
 enum {
 	MLX5_MKEY_MR = 1,
 	MLX5_MKEY_MW,
-	MLX5_MKEY_MR_USER,
+	MLX5_MKEY_INDIRECT_DEVX,
 };
 
 struct mlx5_core_mkey {
@@ -410,20 +410,14 @@ struct mlx5_core_mkey {
 	u32			type;
 };
 
-struct mlx5_core_mr {
-	u64			iova;
-	u64			size;
-	u32			key;
-	u32			pd;
-};
-
 enum mlx5_res_type {
 	MLX5_RES_QP	= MLX5_EVENT_QUEUE_TYPE_QP,
 	MLX5_RES_RQ	= MLX5_EVENT_QUEUE_TYPE_RQ,
 	MLX5_RES_SQ	= MLX5_EVENT_QUEUE_TYPE_SQ,
 	MLX5_RES_SRQ	= 3,
 	MLX5_RES_XSRQ	= 4,
-	MLX5_RES_DCT	= 5,
+	MLX5_RES_XRQ	= 5,
+	MLX5_RES_DCT	= MLX5_EVENT_QUEUE_TYPE_DCT,
 };
 
 struct mlx5_core_rsc_common {
@@ -477,6 +471,7 @@ struct mlx5_core_srq {
 	struct completion		free;
 };
 
+struct mlx5_ib_dev;
 struct mlx5_eq_table {
 	void __iomem	       *update_ci;
 	void __iomem	       *update_arm_ci;
@@ -485,9 +480,10 @@ struct mlx5_eq_table {
 	struct mlx5_eq		async_eq;
 	struct mlx5_eq		cmd_eq;
 	int			num_comp_vectors;
-	/* protect EQs list
-	 */
-	spinlock_t		lock;
+	spinlock_t		lock;	/* protect EQs list */
+	struct mlx5_ib_dev	*dev;	/* for devx event notifier */
+	bool (*cb)(struct mlx5_core_dev *mdev,
+		   uint8_t event_type, void *data);
 };
 
 struct mlx5_core_health {
@@ -551,6 +547,7 @@ struct mlx5_rl_entry {
 	u32			rate;
 	u16			burst;
 	u16			index;
+	u32			qos_handle; /* schedule queue handle */
 	u32			refcount;
 };
 
@@ -999,21 +996,21 @@ int mlx5_core_arm_srq(struct mlx5_core_dev *dev, struct mlx5_core_srq *srq,
 void mlx5_init_mr_table(struct mlx5_core_dev *dev);
 void mlx5_cleanup_mr_table(struct mlx5_core_dev *dev);
 int mlx5_core_create_mkey_cb(struct mlx5_core_dev *dev,
-			     struct mlx5_core_mr *mkey,
+			     struct mlx5_core_mkey *mkey,
 			     struct mlx5_async_ctx *async_ctx, u32 *in,
 			     int inlen, u32 *out, int outlen,
 			     mlx5_async_cbk_t callback,
 			     struct mlx5_async_work *context);
 int mlx5_core_create_mkey(struct mlx5_core_dev *dev,
-			  struct mlx5_core_mr *mr,
+			  struct mlx5_core_mkey *mr,
 			  u32 *in, int inlen);
-int mlx5_core_destroy_mkey(struct mlx5_core_dev *dev, struct mlx5_core_mr *mkey);
-int mlx5_core_query_mkey(struct mlx5_core_dev *dev, struct mlx5_core_mr *mkey,
+int mlx5_core_destroy_mkey(struct mlx5_core_dev *dev, struct mlx5_core_mkey *mkey);
+int mlx5_core_query_mkey(struct mlx5_core_dev *dev, struct mlx5_core_mkey *mkey,
 			 u32 *out, int outlen);
-int mlx5_core_dump_fill_mkey(struct mlx5_core_dev *dev, struct mlx5_core_mr *mr,
+int mlx5_core_dump_fill_mkey(struct mlx5_core_dev *dev, struct mlx5_core_mkey *mr,
 			     u32 *mkey);
-int mlx5_core_alloc_pd(struct mlx5_core_dev *dev, u32 *pdn);
-int mlx5_core_dealloc_pd(struct mlx5_core_dev *dev, u32 pdn);
+int mlx5_core_alloc_pd(struct mlx5_core_dev *dev, u32 *pdn, u16 uid);
+int mlx5_core_dealloc_pd(struct mlx5_core_dev *dev, u32 pdn, u16 uid);
 int mlx5_core_mad_ifc(struct mlx5_core_dev *dev, const void *inb, void *outb,
 		      u16 opmod, u8 port);
 void mlx5_fwp_flush(struct mlx5_fw_page *fwp);
@@ -1195,6 +1192,15 @@ void mlx5_cleanup_rl_table(struct mlx5_core_dev *dev);
 int mlx5_rl_add_rate(struct mlx5_core_dev *dev, u32 rate, u32 burst, u16 *index);
 void mlx5_rl_remove_rate(struct mlx5_core_dev *dev, u32 rate, u32 burst);
 bool mlx5_rl_is_in_range(const struct mlx5_core_dev *dev, u32 rate, u32 burst);
+int mlx5e_query_rate_limit_cmd(struct mlx5_core_dev *dev, u16 index, u32 *scq_handle);
+
+static inline u32 mlx5_rl_get_scq_handle(struct mlx5_core_dev *dev, uint16_t index)
+{
+	KASSERT(index > 0,
+	    ("invalid rate index for sq remap, failed retrieving SCQ handle"));
+
+        return (dev->priv.rl_table.rl_entry[index - 1].qos_handle);
+}
 
 static inline bool mlx5_rl_is_supported(struct mlx5_core_dev *dev)
 {

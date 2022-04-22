@@ -1,6 +1,9 @@
 # $FreeBSD$
 
 NO_WMISSING_VARIABLE_DECLARATIONS=
+# Can't instrument these files since that breaks non-sanitized programs.
+MK_ASAN:=	no
+MK_UBSAN:=	no
 
 .include <src.opts.mk>
 MK_SSP=	no
@@ -16,6 +19,7 @@ CRT1OBJS+=	crtbrand.o feature_note.o ignore_init_note.o
 
 ACFLAGS+=	-DLOCORE
 
+CFLAGS+=	-DSTRIP_FBSDID
 CFLAGS+=	-fno-asynchronous-unwind-tables
 CFLAGS+=	-fno-omit-frame-pointer
 CFLAGS+=	-I${.CURDIR:H}/common \

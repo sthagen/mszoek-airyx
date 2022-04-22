@@ -176,6 +176,9 @@
 /// The flag for reset on SIGINT.
 #define BC_FLAG_SIGINT (UINTMAX_C(1)<<12)
 
+/// The flag for exiting with expressions.
+#define BC_FLAG_EXPR_EXIT (UINTMAX_C(1)<<13)
+
 /// A convenience macro for getting the TTYIN flag.
 #define BC_TTYIN (vm.flags & BC_FLAG_TTYIN)
 
@@ -219,6 +222,9 @@
 
 /// A convenience macro for getting the leading zero flag.
 #define BC_Z (vm.flags & BC_FLAG_Z)
+
+/// A convenience macro for getting the expression exit flag.
+#define BC_EXPR_EXIT (vm.flags & BC_FLAG_EXPR_EXIT)
 
 #if BC_ENABLED
 
@@ -539,8 +545,10 @@ typedef struct BcVm {
 	/// The messages for each error.
 	const char *err_msgs[BC_ERR_NELEMS];
 
+#if BC_ENABLE_NLS
 	/// The locale.
 	const char *locale;
+#endif // BC_ENABLE_NLS
 
 #endif // !BC_ENABLE_LIBRARY
 
@@ -746,11 +754,18 @@ void* bc_vm_realloc(void *ptr, size_t n);
 char* bc_vm_strdup(const char *str);
 
 /**
- * Reads a line into BcVm's buffer field.
+ * Reads a line from stdin into BcVm's buffer field.
  * @param clear  True if the buffer should be cleared first, false otherwise.
  * @return       True if a line was read, false otherwise.
  */
 bool bc_vm_readLine(bool clear);
+
+/**
+ * Reads a line from the command-line expressions into BcVm's buffer field.
+ * @param clear  True if the buffer should be cleared first, false otherwise.
+ * @return       True if a line was read, false otherwise.
+ */
+bool bc_vm_readBuf(bool clear);
 
 /**
  * A convenience and portability function for OpenBSD's pledge().

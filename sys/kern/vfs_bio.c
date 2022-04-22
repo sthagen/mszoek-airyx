@@ -52,9 +52,10 @@ __FBSDID("$FreeBSD$");
 #include <sys/asan.h>
 #include <sys/bio.h>
 #include <sys/bitset.h>
+#include <sys/boottrace.h>
+#include <sys/buf.h>
 #include <sys/conf.h>
 #include <sys/counter.h>
-#include <sys/buf.h>
 #include <sys/devicestat.h>
 #include <sys/eventhandler.h>
 #include <sys/fail.h>
@@ -399,12 +400,6 @@ struct bufqueue __exclusive_cache_line bqempty;
  * per-cpu empty buffer cache.
  */
 uma_zone_t buf_zone;
-
-/*
- * Single global constant for BUF_WMESG, to avoid getting multiple references.
- * buf_wmesg is referred from macros.
- */
-const char *buf_wmesg = BUF_WMESG;
 
 static int
 sysctl_runningspace(SYSCTL_HANDLER_ARGS)
@@ -1060,13 +1055,22 @@ kern_vfs_bio_buffer_alloc(caddr_t v, long physmem_est)
 	int tuned_nbuf;
 	long maxbuf, maxbuf_sz, buf_sz,	biotmap_sz;
 
-#ifdef KASAN
 	/*
-	 * With KASAN enabled, the kernel map is shadowed.  Account for this
-	 * when sizing maps based on the amount of physical memory available.
+	 * With KASAN or KMSAN enabled, the kernel map is shadowed.  Account for
+	 * this when sizing maps based on the amount of physical memory
+	 * available.
 	 */
+#if defined(KASAN)
 	physmem_est = (physmem_est * KASAN_SHADOW_SCALE) /
 	    (KASAN_SHADOW_SCALE + 1);
+#elif defined(KMSAN)
+	physmem_est /= 3;
+
+	/*
+	 * KMSAN cannot reliably determine whether buffer data is initialized
+	 * unless it is updated through a KVA mapping.
+	 */
+	unmapped_buf_allowed = 0;
 #endif
 
 	/*
@@ -1175,6 +1179,12 @@ kern_vfs_bio_buffer_alloc(caddr_t v, long physmem_est)
 	return (v);
 }
 
+/*
+ * Single global constant for BUF_WMESG, to avoid getting multiple
+ * references.
+ */
+static const char buf_wmesg[] = "bufwait";
+
 /* Initialize the buffer subsystem.  Called before use of any buffers. */
 void
 bufinit(void)
@@ -1205,7 +1215,7 @@ bufinit(void)
 		bp->b_xflags = 0;
 		bp->b_data = bp->b_kvabase = unmapped_buf;
 		LIST_INIT(&bp->b_dep);
-		BUF_LOCKINIT(bp);
+		BUF_LOCKINIT(bp, buf_wmesg);
 		bq_insert(&bqempty, bp, false);
 	}
 
@@ -1457,10 +1467,12 @@ bufshutdown(int show_busybufs)
 		 * Failed to sync all blocks. Indicate this and don't
 		 * unmount filesystems (thus forcing an fsck on reboot).
 		 */
+		BOOTTRACE("shutdown failed to sync buffers");
 		printf("Giving up on %d buffers\n", nbusy);
 		DELAY(5000000);	/* 5 seconds */
 		swapoff_all();
 	} else {
+		BOOTTRACE("shutdown sync complete");
 		if (!first_buf_printf)
 			printf("Final sync complete\n");
 
@@ -1480,6 +1492,7 @@ bufshutdown(int show_busybufs)
 			swapoff_all();
 			vfs_unmountall();
 		}
+		BOOTTRACE("shutdown unmounted all filesystems");
 	}
 	DELAY(100000);		/* wait for console output to finish */
 }
@@ -1709,7 +1722,7 @@ buf_alloc(struct bufdomain *bd)
 	if (freebufs == bd->bd_lofreebuffers)
 		bufspace_daemon_wakeup(bd);
 
-	error = BUF_LOCK(bp, LK_EXCLUSIVE, NULL);
+	error = BUF_LOCK(bp, LK_EXCLUSIVE | LK_NOWITNESS, NULL);
 	KASSERT(error == 0, ("%s: BUF_LOCK on free buf %p: %d.", __func__, bp,
 	    error));
 	(void)error;
@@ -3961,8 +3974,15 @@ getblkx(struct vnode *vp, daddr_t blkno, daddr_t dblkno, int size, int slpflag,
 
 	/* Attempt lockless lookup first. */
 	bp = gbincore_unlocked(bo, blkno);
-	if (bp == NULL)
+	if (bp == NULL) {
+		/*
+		 * With GB_NOCREAT we must be sure about not finding the buffer
+		 * as it may have been reassigned during unlocked lookup.
+		 */
+		if ((flags & GB_NOCREAT) != 0)
+			goto loop;
 		goto newbuf_unlocked;
+	}
 
 	error = BUF_TIMELOCK(bp, LK_EXCLUSIVE | LK_NOWAIT, NULL, "getblku", 0,
 	    0);
@@ -3987,7 +4007,10 @@ loop:
 		 * it must be on a queue.
 		 */
 		lockflags = LK_EXCLUSIVE | LK_INTERLOCK |
-		    ((flags & GB_LOCK_NOWAIT) ? LK_NOWAIT : LK_SLEEPFAIL);
+		    ((flags & GB_LOCK_NOWAIT) != 0 ? LK_NOWAIT : LK_SLEEPFAIL);
+#ifdef WITNESS
+		lockflags |= (flags & GB_NOWITNESS) != 0 ? LK_NOWITNESS : 0;
+#endif
 
 		error = BUF_TIMELOCK(bp, lockflags,
 		    BO_LOCKPTR(bo), "getblk", slpflag, slptimeo);
@@ -4415,7 +4438,11 @@ biodone(struct bio *bp)
 		atomic_add_int(&inflight_transient_maps, -1);
 	}
 	done = bp->bio_done;
-	if (done == NULL) {
+	/*
+	 * The check for done == biodone is to allow biodone to be
+	 * used as a bio_done routine.
+	 */
+	if (done == NULL || done == biodone) {
 		mtxp = mtx_pool_find(mtxpool_sleep, bp);
 		mtx_lock(mtxp);
 		bp->bio_flags |= BIO_DONE;

@@ -180,7 +180,8 @@ badoff:
 	ldep->de_dirclust = dirclust;
 	ldep->de_diroffset = diroffset;
 	ldep->de_inode = inode;
-	lockmgr(nvp->v_vnlock, LK_EXCLUSIVE, NULL);
+	cluster_init_vn(&ldep->de_clusterw);
+	lockmgr(nvp->v_vnlock, LK_EXCLUSIVE | LK_NOWITNESS, NULL);
 	VN_LOCK_AREC(nvp);	/* for doscheckpath */
 	fc_purge(ldep, 0);	/* init the FAT cache for this denode */
 	error = insmntque(nvp, mntp);

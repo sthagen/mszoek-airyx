@@ -94,8 +94,9 @@ typedef struct {
 	u_int32_t generation;
 	int       index;
 #define CAM_UNQUEUED_INDEX	-1
-#define CAM_ACTIVE_INDEX	-2	
-#define CAM_DONEQ_INDEX		-3	
+#define CAM_ACTIVE_INDEX	-2
+#define CAM_DONEQ_INDEX		-3
+#define CAM_ASYNC_INDEX		-4
 #define CAM_EXTRAQ_INDEX	INT_MAX
 } cam_pinfo;
 
@@ -377,6 +378,8 @@ caddr_t	cam_quirkmatch(caddr_t target, caddr_t quirk_table, int num_entries,
 		       int entry_size, cam_quirkmatch_t *comp_func);
 
 void	cam_strvis(u_int8_t *dst, const u_int8_t *src, int srclen, int dstlen);
+void	cam_strvis_flag(u_int8_t *dst, const u_int8_t *src, int srclen,
+			int dstlen, uint32_t flags);
 void	cam_strvis_sbuf(struct sbuf *sb, const u_int8_t *src, int srclen,
 			uint32_t flags);
 

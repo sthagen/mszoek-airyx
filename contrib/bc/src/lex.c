@@ -82,8 +82,9 @@ void bc_lex_comment(BcLex *l) {
 			// If this is true, we need to request more data.
 			if (BC_ERR(!c || buf[i + 1] == '\0')) {
 
-				// Read more.
-				if (!vm.eof && l->is_stdin) got_more = bc_lex_readLine(l);
+				// Read more, if possible.
+				if (!vm.eof && (l->is_stdin || l->is_exprs))
+					got_more = bc_lex_readLine(l);
 
 				break;
 			}
@@ -258,6 +259,8 @@ void bc_lex_file(BcLex *l, const char *file) {
 
 void bc_lex_next(BcLex *l) {
 
+	BC_SIG_ASSERT_LOCKED;
+
 	assert(l != NULL);
 
 	l->last = l->t;
@@ -294,18 +297,39 @@ static void bc_lex_fixText(BcLex *l, const char *text, size_t len) {
 
 bool bc_lex_readLine(BcLex *l) {
 
-	bool good = bc_vm_readLine(false);
+	bool good;
+
+	// These are reversed because they should be already locked, but
+	// bc_vm_readLine() needs them to be unlocked.
+	BC_SIG_UNLOCK;
+
+	// Make sure we read from the appropriate place.
+	if (l->is_stdin) good = bc_vm_readLine(false);
+	else {
+		assert(l->is_exprs);
+		good = bc_vm_readBuf(false);
+	}
+
+	BC_SIG_LOCK;
 
 	bc_lex_fixText(l, vm.buffer.v, vm.buffer.len - 1);
 
 	return good;
 }
 
-void bc_lex_text(BcLex *l, const char *text, bool is_stdin) {
+void bc_lex_text(BcLex *l, const char *text, bool is_stdin, bool is_exprs) {
+
+	BC_SIG_ASSERT_LOCKED;
+
 	assert(l != NULL && text != NULL);
+
 	bc_lex_fixText(l, text, strlen(text));
 	l->i = 0;
 	l->t = l->last = BC_LEX_INVALID;
 	l->is_stdin = is_stdin;
+	l->is_exprs = is_exprs;
+
+	assert(!l->is_stdin || !l->is_exprs);
+
 	bc_lex_next(l);
 }

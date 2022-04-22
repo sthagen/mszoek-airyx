@@ -143,9 +143,10 @@ NSString * const NSWindowDidAnimateNotification=@"NSWindowDidAnimateNotification
 
 /* This method is Cococtron specific and can be override by subclasses, do not change method name */
 +(BOOL)hasMainMenuForStyleMask:(NSUInteger)styleMask {
+#ifdef MENUS_IN_WINDOW
     if(styleMask&NSTitledWindowMask)
         return YES;
-    
+#endif
     return NO;
 }
 
@@ -3165,5 +3166,14 @@ NSString * const NSWindowDidAnimateNotification=@"NSWindowDidAnimateNotification
 {
     [[self platformWindow] dirtyRect:rect];
 }
+
+-(void)requestMove:(NSEvent *)event {
+    [[self platformWindow] requestMove:event];
+}
+
+-(void)requestResize:(NSEvent *)event {
+    [[self platformWindow] requestResize:event];
+}
+
 @end
 

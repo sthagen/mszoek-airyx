@@ -1,5 +1,5 @@
 # What is Airyx? [![Build Status](https://api.cirrus-ci.com/github/mszoek/airyx.svg?branch=main&task=airyx)](https://cirrus-ci.com/github/mszoek/airyx) [![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa.svg)](CODE_OF_CONDUCT.md)
-### Don't you speak English? Read this in: [Italian](README.IT.md) 
+### Don't speak English? Read this in: [Italian](README.IT.md) 
 
 Airyx is a new open source OS project that aims to provide a similar experience and some compatibility with macOS on x86-64 sytems. It builds on the solid foundations of FreeBSD, existing open source packages in the same space, and new code to fill the gaps.
 
@@ -17,6 +17,7 @@ Please visit [airyx.org](https://airyx.org/) for more info: [Release Notes](http
 
 ### Join us!
 
+* Can you help build the dream? See the current projects/needs in [CONTRIBUTING.md](CONTRIBUTING.md)!
 * Our [Discord](https://discord.com/invite/8caJbAGNwY) server.
 * `#airyx:matrix.org` - join via [Element.io](https://app.element.io/#/room/#airyx:matrix.org)
 * `#airyx` on [Libera IRC](https://web.libera.chat/?channel=#airyx)
@@ -31,28 +32,17 @@ New logo designs & artwork by [nayaabkhan](https://nayaabkhan.me). Hat tip for t
 
 FreeBSD Source:
 ---------------
-This is the top level of the FreeBSD source directory.  This file
-was last revised on:
-$FreeBSD$
+This is the top level of the FreeBSD source directory.
 
-FreeBSD is an operating system used to power modern servers,
-desktops, and embedded platforms. A large community has
-continually developed it for more than thirty years. Its
-advanced networking, security, and storage features have
-made FreeBSD the platform of choice for many of the
-busiest web sites and most pervasive embedded networking
-and storage devices.
+FreeBSD is an operating system used to power modern servers, desktops, and embedded platforms.
+A large community has continually developed it for more than thirty years.
+Its advanced networking, security, and storage features have made FreeBSD the platform of choice for many of the busiest web sites and most pervasive embedded networking and storage devices.
 
-For copyright information, please see the file COPYRIGHT in this
-directory. Additional copyright information also exists for some
-sources in this tree - please see the specific source directories for
-more information.
+For copyright information, please see [the file COPYRIGHT](COPYRIGHT) in this directory.
+Additional copyright information also exists for some sources in this tree - please see the specific source directories for more information.
 
-The Makefile in this directory supports a number of targets for
-building components (or all) of the FreeBSD source tree.  See build(7), config(8),
-https://www.freebsd.org/doc/en_US.ISO8859-1/books/handbook/makeworld.html, and
-https://www.freebsd.org/doc/en_US.ISO8859-1/books/handbook/kernelconfig.html
-for more information, including setting make(1) variables.
+The Makefile in this directory supports a number of targets for building components (or all) of the FreeBSD source tree.
+See build(7), config(8), [FreeBSD handbook on building userland](https://docs.freebsd.org/en/books/handbook/cutting-edge/#makeworld), and [Handbook for kernels](https://docs.freebsd.org/en/books/handbook/kernelconfig/) for more information, including setting make(1) variables.
 
 Source Roadmap:
 ---------------
@@ -81,7 +71,4 @@ Source Roadmap:
 | usr.bin | User commands. |
 | usr.sbin | System administration commands. |
 
-For information on synchronizing your source tree with one or more of
-the FreeBSD Project's development branches, please see:
-
-  https://www.freebsd.org/doc/en_US.ISO8859-1/books/handbook/current-stable.html
+For information on synchronizing your source tree with one or more of the FreeBSD Project's development branches, please see [FreeBSD Handbook](https://docs.freebsd.org/en/books/handbook/cutting-edge/#current-stable).

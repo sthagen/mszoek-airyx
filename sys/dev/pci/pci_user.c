@@ -562,7 +562,7 @@ pci_list_vpd(device_t dev, struct pci_list_vpd_io *lvio)
 {
 	struct pci_vpd_element vpd_element, *vpd_user;
 	struct pcicfg_vpd *vpd;
-	size_t len;
+	size_t len, datalen;
 	int error, i;
 
 	vpd = pci_fetch_vpd_list(dev);
@@ -593,16 +593,17 @@ pci_list_vpd(device_t dev, struct pci_list_vpd_io *lvio)
 	 * Copyout the identifier string followed by each keyword and
 	 * value.
 	 */
+	datalen = strlen(vpd->vpd_ident);
+	KASSERT(datalen <= 255, ("invalid VPD ident length"));
 	vpd_user = lvio->plvi_data;
 	vpd_element.pve_keyword[0] = '\0';
 	vpd_element.pve_keyword[1] = '\0';
 	vpd_element.pve_flags = PVE_FLAG_IDENT;
-	vpd_element.pve_datalen = strlen(vpd->vpd_ident);
+	vpd_element.pve_datalen = datalen;
 	error = copyout(&vpd_element, vpd_user, sizeof(vpd_element));
 	if (error)
 		return (error);
-	error = copyout(vpd->vpd_ident, vpd_user->pve_data,
-	    strlen(vpd->vpd_ident));
+	error = copyout(vpd->vpd_ident, vpd_user->pve_data, datalen);
 	if (error)
 		return (error);
 	vpd_user = PVE_NEXT_LEN(vpd_user, vpd_element.pve_datalen);
@@ -854,7 +855,7 @@ pci_bar_mmap(device_t pcidev, struct pci_bar_mmap *pbm)
 	struct thread *td;
 	struct sglist *sg;
 	struct pci_map *pm;
-	vm_paddr_t membase;
+	rman_res_t membase;
 	vm_paddr_t pbase;
 	vm_size_t plen;
 	vm_offset_t addr;
@@ -877,7 +878,11 @@ pci_bar_mmap(device_t pcidev, struct pci_bar_mmap *pbm)
 		return (EBUSY); /* XXXKIB enable if _ACTIVATE */
 	if (!PCI_BAR_MEM(pm->pm_value))
 		return (EIO);
-	membase = pm->pm_value & PCIM_BAR_MEM_BASE;
+	error = bus_translate_resource(pcidev, SYS_RES_MEMORY,
+	    pm->pm_value & PCIM_BAR_MEM_BASE, &membase);
+	if (error != 0)
+		return (error);
+
 	pbase = trunc_page(membase);
 	plen = round_page(membase + ((pci_addr_t)1 << pm->pm_size)) -
 	    pbase;
@@ -1055,8 +1060,11 @@ pci_ioctl(struct cdev *dev, u_long cmd, caddr_t data, int flag, struct thread *t
 		}
 	}
 
-	/* Giant because newbus is Giant locked revisit with newbus locking */
-	mtx_lock(&Giant);
+	/*
+	 * Use bus topology lock to ensure that the pci list of devies doesn't
+	 * change while we're traversing the list, in some cases multiple times.
+	 */
+	bus_topo_lock();
 
 	switch (cmd) {
 	case PCIOCGETCONF:
@@ -1408,7 +1416,7 @@ getconfexit:
 		break;
 	}
 
-	mtx_unlock(&Giant);
+	bus_topo_unlock();
 
 	return (error);
 }

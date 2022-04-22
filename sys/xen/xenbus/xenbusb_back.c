@@ -51,16 +51,16 @@ __FBSDID("$FreeBSD$");
 #include <sys/sx.h>
 #include <sys/taskqueue.h>
 
-#include <machine/xen/xen-os.h>
 #include <machine/stdarg.h>
 
+#include <xen/xen-os.h>
 #include <xen/gnttab.h>
 #include <xen/xenbus/xenbusvar.h>
 #include <xen/xenbus/xenbusb.h>
 
 /*------------------ Private Device Attachment Functions  --------------------*/
 /**
- * \brief Probe for the existance of the XenBus back bus.
+ * \brief Probe for the existence of the XenBus back bus.
  *
  * \param dev  NewBus device_t for this XenBus back bus instance.
  *

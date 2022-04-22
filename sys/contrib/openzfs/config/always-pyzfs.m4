@@ -6,7 +6,7 @@ dnl # https://www.gnu.org/software/autoconf-archive/ax_python_module.html
 dnl # Required by ZFS_AC_CONFIG_ALWAYS_PYZFS.
 dnl #
 AC_DEFUN([ZFS_AC_PYTHON_MODULE], [
-	PYTHON_NAME=$(basename $PYTHON)
+	PYTHON_NAME=${PYTHON##*/}
 	AC_MSG_CHECKING([for $PYTHON_NAME module: $1])
 	AS_IF([$PYTHON -c "import $1" 2>/dev/null], [
 		AC_MSG_RESULT(yes)
@@ -18,7 +18,7 @@ AC_DEFUN([ZFS_AC_PYTHON_MODULE], [
 ])
 
 dnl #
-dnl # Determines if pyzfs can be built, requires Python 2.7 or later.
+dnl # Determines if pyzfs can be built, requires Python 3.6 or later.
 dnl #
 AC_DEFUN([ZFS_AC_CONFIG_ALWAYS_PYZFS], [
 	AC_ARG_ENABLE([pyzfs],
@@ -62,12 +62,11 @@ AC_DEFUN([ZFS_AC_CONFIG_ALWAYS_PYZFS], [
 	])
 
 	dnl #
-	dnl # Require python-devel libraries
+	dnl # Require python3-devel libraries
 	dnl #
 	AS_IF([test "x$enable_pyzfs" = xcheck  -o "x$enable_pyzfs" = xyes], [
 		AS_CASE([$PYTHON_VERSION],
-			[3.*], [PYTHON_REQUIRED_VERSION=">= '3.4.0'"],
-			[2.*], [PYTHON_REQUIRED_VERSION=">= '2.7.0'"],
+			[3.*], [PYTHON_REQUIRED_VERSION=">= '3.6.0'"],
 			[AC_MSG_ERROR("Python $PYTHON_VERSION unknown")]
 		)
 

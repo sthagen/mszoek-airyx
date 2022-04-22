@@ -257,6 +257,7 @@ menu.welcome = {
 			menu_entries.zpool_checkpoints,
 			menu_entries.boot_envs,
 			menu_entries.chainload,
+			menu_entries.vendor,
 		}
 	end,
 	all_entries = {
@@ -400,6 +401,12 @@ menu.welcome = {
 			end,
 			alias = {"l", "L"},
 		},
+		vendor = {
+			entry_type = core.MENU_ENTRY,
+			visible = function()
+				return false
+			end
+		},
 	},
 }
 
@@ -515,7 +522,7 @@ function menu.autoboot(delay)
 			last = time
 			screen.setcursor(x, y)
 			print("Autoboot in " .. time ..
-			    " seconds. [Space] to pause")
+			    " seconds. [Space] to pause ")
 			screen.defcursor()
 		end
 		if io.ischar() then

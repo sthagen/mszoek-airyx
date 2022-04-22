@@ -21,13 +21,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 @implementation NSMainMenuView
 
 +(NSFont *)menuFont {
-   return [NSFont menuFontOfSize:0];
+   return [NSFont menuBarFontOfSize:15.0];
 }
 
 +(float)menuHeight {
-   // we're using global menus in Airyx so we'll just make this 0 height for now
-   return 0.0;
-#if 0
    NSDictionary *attributes=[NSDictionary dictionaryWithObjectsAndKeys:
      [self menuFont],NSFontAttributeName,nil];
    float         result=[@"Menu" sizeWithAttributes:attributes].height;
@@ -37,7 +34,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
    result+=1; // sunken title baseline
 
 	return result;
-#endif
 }
 
 -initWithFrame:(NSRect)frame menu:(NSMenu *)menu {
@@ -77,7 +73,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 -(NSRect)titleRectForItem:(NSMenuItem *)item previousBorderRect:(NSRect)previousBorderRect
 {
 	NSRect result;
-	NSSize titleSize = [[self graphicsStyle] menuItemTextSize:[item title]];
+	NSSize titleSize = NSZeroSize;
+        if([item hasSubmenu] && [[[item submenu] _name] isEqualToString:@"NSAppleMenu"])
+            titleSize = [[self graphicsStyle] menuItemAttributedTextSize:[item attributedTitle]];
+        else
+            titleSize = [[self graphicsStyle] menuItemTextSize:[item title]];
 
 	result.origin = NSMakePoint(NSMaxX(previousBorderRect)+6,floor(([self bounds].size.height-titleSize.height)/2));
 	result.size = titleSize;
@@ -186,7 +186,12 @@ static void drawSunkenBorder(NSRect rect){
 		titleRect.origin.x = borderRect.origin.x + (NSWidth(borderRect) - NSWidth(titleRect)) / 2;
 		titleRect.origin.y = borderRect.origin.y + (NSHeight(borderRect) - NSHeight(titleRect)) / 2;
 
-		[[self graphicsStyle] drawMenuItemText:title inRect:titleRect enabled:YES selected:(i==_selectedItemIndex)];
+                if([item hasSubmenu] && [[[item submenu] _name] isEqualToString:@"NSAppleMenu"]) 
+                    [[self graphicsStyle] drawAttributedMenuItemText:[item attributedTitle]
+                        inRect:titleRect enabled:YES selected:(i==_selectedItemIndex)];
+                else
+                    [[self graphicsStyle] drawMenuItemText:title inRect:titleRect
+                        enabled:YES selected:(i==_selectedItemIndex)];
 		
 		previousBorderRect=borderRect;
 		
@@ -279,10 +284,8 @@ static void drawSunkenBorder(NSRect rect){
 
    if(_selectedItemIndex==count){
     itemRect=[self overflowRect];
-
     topLeft=NSMakePoint(itemRect.origin.x,NSMaxY(itemRect));
-   }
-   else {
+   } else {
     for(i=0;i<count;i++){
      NSMenuItem *item=[items objectAtIndex:i];
      NSRect      titleRect=[self titleRectForItem:item previousBorderRect:previousBorderRect];
@@ -325,6 +328,7 @@ static void drawSunkenBorder(NSRect rect){
 
     [self positionBranchForSelectedItem:branch screen:screen];
 
+    [branch setParent:[self window]];
     [branch orderFront:nil];
     return [branch menuView];
    }
@@ -338,6 +342,7 @@ static void drawSunkenBorder(NSRect rect){
 
       [self positionBranchForSelectedItem:branch screen:screen];
 
+      [branch setParent:[self window]];
       [branch orderFront:nil];
       return [branch menuView];
      }

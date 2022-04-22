@@ -236,10 +236,7 @@ iaf_allocate_pmc(int cpu, int ri, struct pmc *pm,
 	if (ri < 0 || ri > core_iaf_npmc)
 		return (EINVAL);
 
-	caps = a->pm_caps;
-
-	if (a->pm_class != PMC_CLASS_IAF ||
-	    (caps & IAF_PMC_CAPS) != caps)
+	if (a->pm_class != PMC_CLASS_IAF)
 		return (EINVAL);
 
 	iap = &a->pm_md.pm_iap;
@@ -275,6 +272,7 @@ iaf_allocate_pmc(int cpu, int ri, struct pmc *pm,
 	if (config & IAP_INT)
 		flags |= IAF_PMI;
 
+	caps = a->pm_caps;
 	if (caps & PMC_CAP_INTERRUPT)
 		flags |= IAF_PMI;
 	if (caps & PMC_CAP_SYSTEM)
@@ -742,7 +740,6 @@ iap_allocate_pmc(int cpu, int ri, struct pmc *pm,
     const struct pmc_op_pmcallocate *a)
 {
 	uint8_t ev;
-	uint32_t caps;
 	const struct pmc_md_iap_op_pmcallocate *iap;
 
 	KASSERT(cpu >= 0 && cpu < pmc_cpu_max(),
@@ -750,10 +747,9 @@ iap_allocate_pmc(int cpu, int ri, struct pmc *pm,
 	KASSERT(ri >= 0 && ri < core_iap_npmc,
 	    ("[core,%d] illegal row-index value %d", __LINE__, ri));
 
-	/* check requested capabilities */
-	caps = a->pm_caps;
-	if ((IAP_PMC_CAPS & caps) != caps)
-		return (EPERM);
+	if (a->pm_class != PMC_CLASS_IAP)
+		return (EINVAL);
+
 	iap = &a->pm_md.pm_iap;
 	ev = IAP_EVSEL_GET(iap->pm_iap_config);
 
@@ -1077,7 +1073,7 @@ core_intr(struct trapframe *tf)
 	int error, found_interrupt, ri;
 	uint64_t msr;
 
-	PMCDBG3(MDP,INT, 1, "cpu=%d tf=0x%p um=%d", curcpu, (void *) tf,
+	PMCDBG3(MDP,INT, 1, "cpu=%d tf=%p um=%d", curcpu, (void *) tf,
 	    TRAPF_USERMODE(tf));
 
 	found_interrupt = 0;

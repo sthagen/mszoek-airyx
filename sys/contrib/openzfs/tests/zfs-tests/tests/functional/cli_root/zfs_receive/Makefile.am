@@ -19,6 +19,7 @@ dist_pkgdata_SCRIPTS = \
 	zfs_receive_015_pos.ksh \
 	zfs_receive_016_pos.ksh \
 	receive-o-x_props_override.ksh \
+	receive-o-x_props_aliases.ksh \
 	zfs_receive_from_encrypted.ksh \
 	zfs_receive_from_zstd.ksh \
 	zfs_receive_new_props.ksh \
@@ -26,7 +27,8 @@ dist_pkgdata_SCRIPTS = \
 	zfs_receive_raw.ksh \
 	zfs_receive_raw_incremental.ksh \
 	zfs_receive_raw_-d.ksh \
-	zfs_receive_-e.ksh
+	zfs_receive_-e.ksh \
+	zfs_receive_-wR-encrypted-mix.ksh
 
 dist_pkgdata_DATA = \
 	zstd_test_data.txt

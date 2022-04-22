@@ -53,7 +53,6 @@ __FBSDID("$FreeBSD$");
 #include <sys/priv.h>
 #include <sys/proc.h>
 #include <sys/protosw.h>
-#include <sys/rmlock.h>
 #include <sys/sdt.h>
 #include <sys/socket.h>
 #include <sys/socketvar.h>
@@ -239,6 +238,7 @@ ip_output_send(struct inpcb *inp, struct ifnet *ifp, struct mbuf *m,
 		 * packet.
 		 */
 		if (mst == NULL) {
+			m_freem(m);
 			error = EAGAIN;
 			goto done;
 		}
@@ -263,6 +263,7 @@ ip_output_send(struct inpcb *inp, struct ifnet *ifp, struct mbuf *m,
 		KASSERT(m->m_pkthdr.rcvif == NULL,
 		    ("trying to add a send tag to a forwarded packet"));
 		if (mst->ifp != ifp) {
+			m_freem(m);
 			error = EAGAIN;
 			goto done;
 		}
@@ -319,7 +320,6 @@ int
 ip_output(struct mbuf *m, struct mbuf *opt, struct route *ro, int flags,
     struct ip_moptions *imo, struct inpcb *inp)
 {
-	struct rm_priotracker in_ifa_tracker;
 	struct ip *ip;
 	struct ifnet *ifp = NULL;	/* keep compiler happy */
 	struct mbuf *m0;
@@ -461,7 +461,7 @@ again:
 		 */
 		ifp = imo->imo_multicast_ifp;
 		mtu = ifp->if_mtu;
-		IFP_TO_IA(ifp, ia, &in_ifa_tracker);
+		IFP_TO_IA(ifp, ia);
 		isbroadcast = 0;	/* fool gcc */
 		/* Interface may have no addresses. */
 		if (ia != NULL)
@@ -513,7 +513,7 @@ again:
 	} else {
 		struct nhop_object *nh;
 
-		nh = fib4_lookup(M_GETFIB(m), ip->ip_dst, 0, NHR_NONE,
+		nh = fib4_lookup(M_GETFIB(m), dst->sin_addr, 0, NHR_NONE,
 		    m->m_pkthdr.flowid);
 		if (nh == NULL) {
 #if defined(IPSEC) || defined(IPSEC_SUPPORT)

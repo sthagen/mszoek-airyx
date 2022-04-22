@@ -431,6 +431,7 @@ MIASM =  \
 	__specialfd.o \
 	aio_writev.o \
 	aio_readv.o \
+	fspacectl.o \
 	sched_getcpu.o \
 	swapoff.o \
 	_kernelrpc_mach_vm_allocate_trap.o \

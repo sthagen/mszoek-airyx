@@ -89,7 +89,7 @@ void le_uuid_enc(void *buf, struct uuid const *uuid);
 
 #else	/* _KERNEL */
 
-/* XXX namespace pollution? */
+/* Avoid conflict with Darwin uuid_t */
 #ifndef _UUID_T_DEFINED
 #define _UUID_T_DEFINED
 typedef struct uuid uuid_t;

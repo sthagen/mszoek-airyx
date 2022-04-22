@@ -104,6 +104,7 @@ struct sysentvec aout_sysvec = {
 	.sv_trap	= NULL,
 	.sv_onexec_old = exec_onexec_old,
 	.sv_onexit =  exit_onexit,
+	.sv_set_fork_retval = x86_set_fork_retval,
 };
 
 #elif defined(__amd64__)
@@ -151,6 +152,7 @@ struct sysentvec aout_sysvec = {
 	.sv_syscallnames = freebsd32_syscallnames,
 	.sv_onexec_old	= exec_onexec_old,
 	.sv_onexit	= exit_onexit,
+	.sv_set_fork_retval = x86_set_fork_retval,
 };
 
 static void
@@ -347,6 +349,10 @@ exec_aout_imgact(struct image_params *imgp)
 	vmspace->vm_taddr = (caddr_t) (uintptr_t) virtual_offset;
 	vmspace->vm_daddr = (caddr_t) (uintptr_t)
 			    (virtual_offset + a_out->a_text);
+
+	error = exec_map_stack(imgp);
+	if (error != 0)
+		return (error);
 
 	/* Fill in image_params */
 	imgp->interpreted = 0;

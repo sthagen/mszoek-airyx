@@ -68,7 +68,7 @@ const uchar dc_sig_msg_len = (uchar) (sizeof(dc_sig_msg) - 1);
 
 /// The copyright banner.
 const char bc_copyright[] =
-	"Copyright (c) 2018-2021 Gavin D. Howard and contributors\n"
+	"Copyright (c) 2018-2022 Gavin D. Howard and contributors\n"
 	"Report bugs at: https://git.yzena.com/gavin/bc\n\n"
 	"This is free software with ABSOLUTELY NO WARRANTY.\n";
 
@@ -202,7 +202,7 @@ const uchar bc_err_ids[] = {
 	BC_ERR_IDX_PARSE, BC_ERR_IDX_PARSE, BC_ERR_IDX_PARSE, BC_ERR_IDX_PARSE,
 	BC_ERR_IDX_PARSE, BC_ERR_IDX_PARSE, BC_ERR_IDX_PARSE, BC_ERR_IDX_PARSE,
 	BC_ERR_IDX_PARSE, BC_ERR_IDX_PARSE, BC_ERR_IDX_PARSE, BC_ERR_IDX_PARSE,
-	BC_ERR_IDX_PARSE, BC_ERR_IDX_PARSE,
+	BC_ERR_IDX_PARSE, BC_ERR_IDX_PARSE, BC_ERR_IDX_PARSE,
 #endif // BC_ENABLED
 
 };
@@ -273,6 +273,7 @@ const char* const bc_err_msgs[] = {
 	"POSIX does not allow comparison operators outside if statements or loops",
 	"POSIX requires 0 or 1 comparison operators per condition",
 	"POSIX requires all 3 parts of a for loop to be non-empty",
+	"POSIX requires a newline between a semicolon and a function definition",
 #if BC_ENABLE_EXTRA_MATH
 	"POSIX does not allow exponential notation",
 #else

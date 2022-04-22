@@ -117,7 +117,7 @@ static void bc_lex_string(BcLex *l) {
 		// is '\q', which makes this loop simpler.
 		for (i = l->i; (c = buf[i]) && c != '"'; ++i) nlines += (c == '\n');
 
-		if (BC_ERR(c == '\0') && !vm.eof && l->is_stdin)
+		if (BC_ERR(c == '\0') && !vm.eof && (l->is_stdin || l->is_exprs))
 			got_more = bc_lex_readLine(l);
 
 	} while (got_more && c != '"');
@@ -157,6 +157,8 @@ void bc_lex_token(BcLex *l) {
 	// account, such as when parsing an identifier. If we don't, the first
 	// character of every identifier would be missing.
 	char c = l->buf[l->i++], c2;
+
+	BC_SIG_ASSERT_LOCKED;
 
 	// This is the workhorse of the lexer.
 	switch (c) {

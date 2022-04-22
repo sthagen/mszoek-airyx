@@ -32,6 +32,12 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 #import <objc/message.h>
 #import <pthread.h>
 
+#include <sys/types.h>
+#include <sys/un.h>
+#include <sys/socket.h>
+#include <stdlib.h>
+#include <unistd.h>
+
 NSString * const NSModalPanelRunLoopMode=@"NSModalPanelRunLoopMode";
 NSString * const NSEventTrackingRunLoopMode=@"NSEventTrackingRunLoopMode";
 
@@ -54,6 +60,21 @@ NSString * const NSApplicationDidUnhideNotification=@"NSApplicationDidUnhideNoti
 NSString * const NSApplicationWillTerminateNotification=@"NSApplicationWillTerminateNotification";
 
 NSString * const NSApplicationDidChangeScreenParametersNotification=@"NSApplicationDidChangeScreenParametersNotification";
+
+#define WINDOWSERVER_SVC_NAME "com.ravynos.WindowServer"
+#define MSG_ID_PORT     90210
+#define MSG_ID_INLINE   90211
+typedef struct {
+    mach_msg_header_t header;
+    unsigned char data[1024];
+    unsigned int len;
+} Message;
+
+typedef struct {
+    mach_msg_header_t header;
+    mach_msg_size_t msgh_descriptor_count;
+    mach_msg_port_descriptor_t descriptor;
+} PortMessage;
 
 @interface NSDocumentController(forward) 
 -(void)_updateRecentDocumentsMenu; 
@@ -127,20 +148,21 @@ id NSApp=nil;
 
    _windows=[[NSMutableArray new] retain];
    _mainMenu=nil;
-      
+
+   // Create a port with send/receive rights that WindowServer will use
+   // to invoke our menu actions
+   mach_port_t task = mach_task_self();
+   if(mach_port_allocate(task, MACH_PORT_RIGHT_RECEIVE, &_wsReplyPort) != KERN_SUCCESS ||
+    mach_port_insert_right(task, _wsReplyPort, _wsReplyPort, MACH_MSG_TYPE_MAKE_SEND) != KERN_SUCCESS) {
+    NSLog(@"Failed to allocate mach_port _wsReplyPort");
+    exit(1);
+   }
+   _wsSvcPort = MACH_PORT_NULL;
+ 
    _dockTile=[[NSDockTile alloc] initWithOwner:self];
    _modalStack=[NSMutableArray new];
     
    _lock=NSZoneMalloc(NULL,sizeof(pthread_mutex_t));
-
-   dbusConnection = [[DKConnection new] retain];
-   if([dbusConnection isConnected] == YES) {
-      dbusMenu = [[[DKMenu alloc] initWithConnection:dbusConnection] retain];
-   } else {
-      [dbusConnection release];
-      dbusConnection = nil;
-      dbusMenu = nil;
-   }
 
    pthread_mutex_init(_lock,NULL);
    
@@ -149,12 +171,9 @@ id NSApp=nil;
    return NSApp;
 }
 
--(DKMenu *)dbusMenu {
-    return [dbusMenu retain];
-}
-
--(DKConnection *)dbusConnection {
-    return [dbusConnection retain];
+-(void)dealloc {
+    mach_port_deallocate(mach_task_self(),_wsReplyPort);
+    [super dealloc];
 }
 
 -(NSGraphicsContext *)context {
@@ -356,7 +375,7 @@ id NSApp=nil;
    if([_mainMenu _menuWithName:@"NSAppleMenu"] == nil) {
      NSString *appName = [[NSProcessInfo processInfo] processName];
      NSMenuItem *appleMenuItem = [[NSMenuItem new] retain];
-     [appleMenuItem setTitle:[@"!" stringByAppendingString:appName]];
+     [appleMenuItem setTitle:appName];
      NSMenu *appleMenu = [[[NSMenu alloc] initApplicationMenu:appName] retain];
      [appleMenuItem setSubmenu:appleMenu];
      [_mainMenu insertItem:appleMenuItem atIndex:0];
@@ -369,7 +388,76 @@ id NSApp=nil;
      [window setMenu:_mainMenu];
    }
 
-   [dbusMenu setMenu:menu];
+    [self sendMenusToWindowServer];
+}
+
+/* Make a copy of the menus with nil delegates and targets before
+ * sending the menu tree to WindowServer. Otherwise it may reject
+ * the menus because of unknown classes.
+ * This function is recursive.
+ */
+
+-(void)_menuEnumerateAndChange:(NSMenu *)menu {
+    NSArray *items = [menu itemArray];
+    [menu setDelegate:nil];
+    for(int i = 0; i < [items count]; ++i) {
+        NSMenuItem *item = [[items objectAtIndex:i] copy];
+        [item setTarget:nil];
+        [menu removeItemAtIndex:i];
+        [menu insertItem:item atIndex:i];
+        if([item hasSubmenu])
+            [self _menuEnumerateAndChange:[item submenu]];
+    }
+}
+
+-(void)sendMenusToWindowServer {
+    if(_mainMenu == nil)
+        return;
+
+    NSMenu *menuCopy = [_mainMenu copy];
+    [self _menuEnumerateAndChange:menuCopy];
+
+    NSDictionary *dict = [NSDictionary
+        dictionaryWithObjects:@[menuCopy]
+        forKeys:@[@"MainMenu"]];
+
+    NSData *d = [NSKeyedArchiver archivedDataWithRootObject:dict];
+
+    // this is a hack since mach OOL can be a bit flaky
+    struct sockaddr_un sun = {0, AF_UNIX, "/tmp/" WINDOWSERVER_SVC_NAME};
+    sun.sun_len = SUN_LEN(&sun);
+    int sock = socket(PF_UNIX, SOCK_STREAM, 0);
+    if(connect(sock, (struct sockaddr *)&sun, sizeof(sun)) < 0) {
+        perror("Unable to install menus to global bar! connect");
+        return;
+    }
+    write(sock, [d bytes], [d length]);
+    close(sock);
+    [menuCopy release];
+    [d release];
+
+    if(_wsSvcPort == MACH_PORT_NULL) {
+        //NSLog(@"bp=%d, looking up service %s", bootstrap_port, WINDOWSERVER_SVC_NAME);
+        if(bootstrap_look_up(bootstrap_port, WINDOWSERVER_SVC_NAME, &_wsSvcPort) != KERN_SUCCESS) {
+            NSLog(@"Failed to locate WindowServer port");
+            return;
+        }
+        //NSLog(@"got service port %d", _wsSvcPort);
+    }
+
+    PortMessage msg = {0};
+    msg.header.msgh_remote_port = _wsSvcPort;
+    msg.header.msgh_bits = MACH_MSGH_BITS_SET(MACH_MSG_TYPE_COPY_SEND, 0, 0, MACH_MSGH_BITS_COMPLEX);
+    msg.header.msgh_id = MSG_ID_PORT;
+    msg.header.msgh_size = sizeof(msg);
+    msg.msgh_descriptor_count = 1;
+    msg.descriptor.type = MACH_MSG_PORT_DESCRIPTOR;
+    msg.descriptor.name = _wsReplyPort;
+    msg.descriptor.disposition = MACH_MSG_TYPE_MAKE_SEND;
+
+    if(mach_msg((mach_msg_header_t *)&msg, MACH_SEND_MSG, sizeof(msg), 0, MACH_PORT_NULL,
+        MACH_MSG_TIMEOUT_NONE, MACH_PORT_NULL) != MACH_MSG_SUCCESS)
+        NSLog(@"Failed to send port message to WS");
 }
 
 -(void)setMenu:(NSMenu *)menu {
@@ -387,7 +475,7 @@ id NSApp=nil;
 -(void)setWindowsMenu:(NSMenu *)menu {
    [_windowsMenu autorelease];
    _windowsMenu=[menu retain];
-   [dbusMenu setMenu:_mainMenu];
+    [self sendMenusToWindowServer];
 }
 
 
@@ -404,7 +492,7 @@ id NSApp=nil;
     [item setTarget:window];
 
     [[self windowsMenu] addItem:item];
-    [dbusMenu setMenu:_mainMenu]; // update layout
+    [self sendMenusToWindowServer];
 }
 
 -(void)changeWindowsItem:(NSWindow *)window title:(NSString *)title filename:(BOOL)isFilename {
@@ -427,7 +515,7 @@ id NSApp=nil;
 		else
 			[self addWindowsItem:window title:title filename:isFilename];
 	}
-    [dbusMenu setMenu:_mainMenu]; // update layout
+    [self sendMenusToWindowServer];
 }
 
 -(void)removeWindowsItem:(NSWindow *)window {
@@ -440,13 +528,10 @@ id NSApp=nil;
             [[self windowsMenu] removeItem:[[[self windowsMenu] itemArray] lastObject]];
           }
     }
-    [dbusMenu setMenu:_mainMenu]; // update layout
+    [self sendMenusToWindowServer];
 }
 
 -(void)updateWindowsItem:(NSWindow *)window {
-#if 0
-    NSUnimplementedMethod();
-#else
    NSMenu *menu=[self windowsMenu];
    int     itemIndex=[[self windowsMenu] indexOfItemWithTarget:window andAction:@selector(makeKeyAndOrderFront:)];
    
@@ -454,8 +539,7 @@ id NSApp=nil;
     NSMenuItem *item=[menu itemAtIndex:itemIndex];
     
    }
-   [dbusMenu setMenu:_mainMenu]; // update layout
-#endif
+    [self sendMenusToWindowServer];
 }
 
 -(BOOL)openFiles
@@ -495,6 +579,11 @@ id NSApp=nil;
 -(void)finishLaunching {
    NSAutoreleasePool *pool=[NSAutoreleasePool new];
    BOOL               needsUntitled=YES;
+
+    // UGLY HACK: this dummy window triggers wayland to tell us about wl_outputs.
+    NSWindow *w = [[NSWindow alloc] initWithContentRect:NSMakeRect(0,0,1,1)
+        styleMask:NSBorderlessWindowMask backing:NSBackingStoreBuffered defer:NO];
+    [w makeKeyAndOrderFront:nil];
 
    NS_DURING
     [[NSNotificationCenter defaultCenter] postNotificationName: NSApplicationWillFinishLaunchingNotification object:self];
@@ -573,7 +662,6 @@ id NSApp=nil;
             [self _setMainWindow:nil];
         }
 
-     [dbusMenu unregisterWindow:[check windowNumber]]; 
      [_windows removeObjectAtIndex:count];
    }
 }
@@ -613,7 +701,9 @@ id NSApp=nil;
     [self finishLaunching];
   }
 
+#if DBUS_KIT
   [dbusConnection performSelectorInBackground:@selector(run) withObject:nil];
+#endif
    
    do {
     // There is another pool inside nextEventMatchingMask. Do we really need this one?
@@ -634,9 +724,6 @@ id NSApp=nil;
 
     //[pool release];
    }while(_isRunning);
-   [dbusConnection stop];
-   [dbusMenu release];
-   [dbusConnection release];
 }
 
 -(BOOL)_performKeyEquivalent:(NSEvent *)event {
@@ -1148,10 +1235,6 @@ id NSApp=nil;
   [[NSDocumentController sharedDocumentController] closeAllDocumentsWithDelegate:self 
                                                              didCloseAllSelector:@selector(_documentController:didCloseAll:contextInfo:)
                                                                      contextInfo:NULL];
-   if(dbusConnection != nil) {
-      [dbusMenu release];
-      [dbusConnection release];
-   }
 }
 
 -(void)_documentController:(NSDocumentController *)docController didCloseAll:(BOOL)didCloseAll contextInfo:(void *)info

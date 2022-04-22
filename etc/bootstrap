@@ -1,8 +1,9 @@
 #!/bin/sh
 echo -=- Bootstrap running -=-
+/sbin/sysctl -w kern.coredump=0
 /sbin/zfs mount -a
 /sbin/zfs set readonly=off airyxOS/ROOT/default
-/bin/rm -f /var/run/nologin
+/bin/rm -f /var/run/nologin /var/run/windowserver
 if [ ! -d /private ]; then
     mkdir /private
 fi
@@ -11,5 +12,16 @@ for d in /dev /etc /var; do
         ln -sf $d /private$d
     fi
 done
-echo -=- Bootstrap complete -=-
 
+# Simple GPU detection
+GPUS=$(pciconf -l|awk '/^vgapci/ {print substr($5,10,4)}')
+for gpu in $GPUS; do
+    if [ "$gpu" = "8086" ]; then
+        kldload i915kms
+        break
+    elif [ "$gpu" = "1002" ]; then
+        kldload amdgpu
+        break
+    fi
+done
+echo -=- Bootstrap complete -=-

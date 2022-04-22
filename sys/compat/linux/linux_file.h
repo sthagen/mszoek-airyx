@@ -36,6 +36,13 @@
 #define	LINUX_AT_EACCESS		0x200
 #define	LINUX_AT_REMOVEDIR		0x200
 #define	LINUX_AT_SYMLINK_FOLLOW		0x400
+#define	LINUX_AT_NO_AUTOMOUNT		0x800
+		/*
+		 * Specific to Linux AT_NO_AUTOMOUNT flag tells the kernel to
+		 * not automount the terminal component of pathname if it is a
+		 * directory that is an automount point. As FreeBSD does not
+		 * have such facility (automount), we can simply ignore this flag.
+		 */
 #define	LINUX_AT_EMPTY_PATH		0x1000
 
 /*
@@ -65,25 +72,34 @@
 /*
  * common open/fcntl flags
  */
-#define	LINUX_O_RDONLY		00000000
-#define	LINUX_O_WRONLY		00000001
-#define	LINUX_O_RDWR		00000002
-#define	LINUX_O_ACCMODE		00000003
-#define	LINUX_O_CREAT		00000100
-#define	LINUX_O_EXCL		00000200
-#define	LINUX_O_NOCTTY		00000400
-#define	LINUX_O_TRUNC		00001000
-#define	LINUX_O_APPEND		00002000
-#define	LINUX_O_NONBLOCK	00004000
+#define	LINUX_O_RDONLY		000000000
+#define	LINUX_O_WRONLY		000000001
+#define	LINUX_O_RDWR		000000002
+#define	LINUX_O_ACCMODE		000000003
+#define	LINUX_O_CREAT		000000100
+#define	LINUX_O_EXCL		000000200
+#define	LINUX_O_NOCTTY		000000400
+#define	LINUX_O_TRUNC		000001000
+#define	LINUX_O_APPEND		000002000
+#define	LINUX_O_NONBLOCK	000004000
 #define	LINUX_O_NDELAY		LINUX_O_NONBLOCK
-#define	LINUX_O_SYNC		00010000
-#define	LINUX_O_ASYNC		00020000
-#define	LINUX_O_DIRECT		00040000	/* Direct disk access hint */
-#define	LINUX_O_LARGEFILE	00100000
-#define	LINUX_O_DIRECTORY	00200000	/* Must be a directory */
-#define	LINUX_O_NOFOLLOW	00400000	/* Do not follow links */
-#define	LINUX_O_NOATIME		01000000
-#define	LINUX_O_CLOEXEC		02000000
+#define	LINUX_O_SYNC		000010000
+#define	LINUX_O_ASYNC		000020000
+#ifndef LINUX_O_DIRECT
+#define	LINUX_O_DIRECT		000040000	/* Direct disk access hint */
+#endif
+#ifndef LINUX_O_LARGEFILE
+#define	LINUX_O_LARGEFILE	000100000
+#endif
+#ifndef LINUX_O_DIRECTORY
+#define	LINUX_O_DIRECTORY	000200000	/* Must be a directory */
+#endif
+#ifndef LINUX_O_NOFOLLOW
+#define	LINUX_O_NOFOLLOW	000400000	/* Do not follow links */
+#endif
+#define	LINUX_O_NOATIME		001000000
+#define	LINUX_O_CLOEXEC		002000000
+#define	LINUX_O_PATH		010000000
 
 #define	LINUX_F_DUPFD		0
 #define	LINUX_F_GETFD		1

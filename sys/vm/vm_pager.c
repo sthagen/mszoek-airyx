@@ -217,6 +217,15 @@ pbuf_zsecond_create(const char *name, int max)
 
 	zone = uma_zsecond_create(name, pbuf_ctor, pbuf_dtor, NULL, NULL,
 	    pbuf_zone);
+
+#ifdef KMSAN
+	/*
+	 * Shrink the size of the pbuf pools if KMSAN is enabled, otherwise the
+	 * shadows of the large KVA allocations eat up too much memory.
+	 */
+	max /= 3;
+#endif
+
 	/*
 	 * uma_prealloc() rounds up to items per slab. If we would prealloc
 	 * immediately on every pbuf_zsecond_create(), we may accumulate too
@@ -458,7 +467,7 @@ pbuf_ctor(void *mem, int size, void *arg, int flags)
 	bp->b_ioflags = 0;
 	bp->b_iodone = NULL;
 	bp->b_error = 0;
-	BUF_LOCK(bp, LK_EXCLUSIVE, NULL);
+	BUF_LOCK(bp, LK_EXCLUSIVE | LK_NOWAIT, NULL);
 
 	return (0);
 }
@@ -480,6 +489,8 @@ pbuf_dtor(void *mem, int size, void *arg)
 	BUF_UNLOCK(bp);
 }
 
+static const char pbuf_wmesg[] = "pbufwait";
+
 static int
 pbuf_init(void *mem, int size, int flags)
 {
@@ -489,7 +500,7 @@ pbuf_init(void *mem, int size, int flags)
 	if (bp->b_kvabase == NULL)
 		return (ENOMEM);
 	bp->b_kvasize = ptoa(PBUF_PAGES);
-	BUF_LOCKINIT(bp);
+	BUF_LOCKINIT(bp, pbuf_wmesg);
 	LIST_INIT(&bp->b_dep);
 	bp->b_rcred = bp->b_wcred = NOCRED;
 	bp->b_xflags = 0;

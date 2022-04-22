@@ -525,6 +525,7 @@
 #define	SYS___specialfd	577
 #define	SYS_aio_writev	578
 #define	SYS_aio_readv	579
+#define	SYS_fspacectl	580
 #define	SYS_sched_getcpu	581
 #define	SYS_swapoff	582
 #define	SYS__kernelrpc_mach_vm_allocate_trap	610

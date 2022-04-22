@@ -52,6 +52,7 @@ __FBSDID("$FreeBSD$");
 #include <efi.h>
 #include <efilib.h>
 #include <efichar.h>
+#include <efirng.h>
 
 #include <uuid.h>
 
@@ -289,6 +290,21 @@ probe_zfs_currdev(uint64_t guid)
 			(void) zfs_attach_nvstore(&currdev);
 		}
 	}
+	return (rv);
+}
+#endif
+
+#ifdef MD_IMAGE_SIZE
+static bool
+probe_md_currdev(void)
+{
+	extern struct devsw md_dev;
+	bool rv;
+
+	set_currdev_devsw(&md_dev, 0);
+	rv = sanity_check_currdev();
+	if (!rv)
+		printf("MD not present\n");
 	return (rv);
 }
 #endif
@@ -565,6 +581,15 @@ find_currdev(bool do_bootmgr, bool is_last,
 			return (0);
 	}
 #endif /* EFI_ZFS_BOOT */
+
+#ifdef MD_IMAGE_SIZE
+	/*
+	 * If there is an embedded MD, try to use that.
+	 */
+	printf("Trying MD\n");
+	if (probe_md_currdev())
+		return (0);
+#endif /* MD_IMAGE_SIZE */
 
 	/*
 	 * Try to find the block device by its handle based on the
@@ -1178,6 +1203,47 @@ main(int argc, CHAR16 *argv[])
 	interact();			/* doesn't return */
 
 	return (EFI_SUCCESS);		/* keep compiler happy */
+}
+
+COMMAND_SET(efi_seed_entropy, "efi-seed-entropy", "try to get entropy from the EFI RNG", command_seed_entropy);
+
+static int
+command_seed_entropy(int argc, char *argv[])
+{
+	EFI_STATUS status;
+	EFI_RNG_PROTOCOL *rng;
+	unsigned int size = 2048;
+	void *buf;
+
+	if (argc > 1) {
+		size = strtol(argv[1], NULL, 0);
+	}
+
+	status = BS->LocateProtocol(&rng_guid, NULL, (VOID **)&rng);
+	if (status != EFI_SUCCESS) {
+		command_errmsg = "RNG protocol not found";
+		return (CMD_ERROR);
+	}
+
+	if ((buf = malloc(size)) == NULL) {
+		command_errmsg = "out of memory";
+		return (CMD_ERROR);
+	}
+
+	status = rng->GetRNG(rng, NULL, size, (UINT8 *)buf);
+	if (status != EFI_SUCCESS) {
+		free(buf);
+		command_errmsg = "GetRNG failed";
+		return (CMD_ERROR);
+	}
+
+	if (file_addbuf("efi_rng_seed", "boot_entropy_platform", size, buf) != 0) {
+		free(buf);
+		return (CMD_ERROR);
+	}
+
+	free(buf);
+	return (CMD_OK);
 }
 
 COMMAND_SET(poweroff, "poweroff", "power off the system", command_poweroff);

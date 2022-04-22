@@ -33,9 +33,11 @@ SUBDIR_BOOTSTRAP= \
 
 SUBDIR=	${SUBDIR_BOOTSTRAP} \
 	.WAIT \
+	libnotify \
+	libSystem \
+	.WAIT \
 	libsqlite3 \
 	geom \
-	libSystem \
 	lib9p \
 	libalias \
 	libarchive \
@@ -43,6 +45,7 @@ SUBDIR=	${SUBDIR_BOOTSTRAP} \
 	libauditd \
 	libbegemot \
 	libblocksruntime \
+	libbsddialog \
 	libbsdstat \
 	libbsm \
 	libbz2 \
@@ -70,6 +73,7 @@ SUBDIR=	${SUBDIR_BOOTSTRAP} \
 	libgeom \
 	libifconfig \
 	libipsec \
+	libiscsiutil \
 	libjail \
 	libjansson \
 	libkiconv \
@@ -80,11 +84,11 @@ SUBDIR=	${SUBDIR_BOOTSTRAP} \
 	libmach \
 	libmemstat \
 	libmd \
+	libmixer \
 	libmt \
 	lib80211 \
 	libnetbsd \
 	libnetmap \
-	libnotify \
 	libnv \
 	libopenbsd \
 	libopie \
@@ -129,7 +133,9 @@ SUBDIR_DEPEND_geom=	libufs
 SUBDIR_DEPEND_googletest= libregex
 SUBDIR_DEPEND_libarchive= libz libbz2 libexpat liblzma libmd libzstd
 SUBDIR_DEPEND_libasl= libSystem libdispatch libxpc
-SUBDIR_DEPEND_libauditd= libbsm
+SUBDIR_DEPEND_libauditdm= libbsm
+SUBDIR_DEPEND_libbsddialog= ncurses
+SUBDIR_DEPEND_libbsm=	libnotify libSystem
 SUBDIR_DEPEND_libbsnmp= ${_libnetgraph}
 SUBDIR_DEPEND_libc++:= libcxxrt
 # libssp_nonshared doesn't need to be linked into libc on every arch, but it is
@@ -197,11 +203,13 @@ SUBDIR.${MK_STATS}+=	libstats
 .if ${COMPILER_TYPE} == "clang" && ${MK_CXX} != "no" && \
     (${MACHINE_CPUARCH} == "aarch64" || ${MACHINE_CPUARCH} == "amd64" || \
     ${MACHINE_CPUARCH} == "arm" || ${MACHINE_CPUARCH} == "i386" || \
-    ${MACHINE_CPUARCH} == "powerpc")
+    ${MACHINE_CPUARCH} == "powerpc" || ${MACHINE_CPUARCH} == "riscv")
 _libclang_rt=	libclang_rt
+.elif (${MK_ASAN} != "no" || ${MK_UBSAN} != "no") && make(all)
+.error Requested build with sanitizers but cannot build runtime libraries!
 .endif
 
-.if ${MK_LIBCPLUSPLUS} != "no"
+.if ${MK_CXX} != "no"
 _libcxxrt=	libcxxrt
 _libcplusplus=	libc++
 _libcplusplus+=	libc++experimental
@@ -227,6 +235,9 @@ SUBDIR.${MK_BHYVE}+=	libvmmapi
 
 .if ${MACHINE_ARCH} != "powerpc"
 SUBDIR.${MK_OPENMP}+=	libomp
+.endif
+.if !defined(COMPAT_32BIT) && ${MK_USB} != "no"
+SUBDIR.${MK_OPENSSH}+=	libcbor libfido2
 .endif
 SUBDIR.${MK_OPENSSL}+=	libmp
 SUBDIR.${MK_PF}+=	libpfctl

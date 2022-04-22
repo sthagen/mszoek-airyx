@@ -2975,7 +2975,6 @@ softdep_journal_lookup(mp, vpp)
 	bzero(&cnp, sizeof(cnp));
 	cnp.cn_nameiop = LOOKUP;
 	cnp.cn_flags = ISLASTCN;
-	cnp.cn_thread = curthread;
 	cnp.cn_cred = curthread->td_ucred;
 	cnp.cn_pnbuf = SUJ_FILE;
 	cnp.cn_nameptr = SUJ_FILE;
@@ -3219,8 +3218,7 @@ journal_unsuspend(struct ufsmount *ump)
 }
 
 static void
-journal_check_space(ump)
-	struct ufsmount *ump;
+journal_check_space(struct ufsmount *ump)
 {
 	struct mount *mp;
 
@@ -13774,7 +13772,7 @@ softdep_request_cleanup_inactivate(struct mount *mp)
 		vholdl(vp);
 		vn_lock(vp, LK_EXCLUSIVE | LK_INTERLOCK | LK_RETRY);
 		VI_LOCK(vp);
-		if (vp->v_data != NULL && vp->v_usecount == 0) {
+		if (IS_UFS(vp) && vp->v_usecount == 0) {
 			while ((vp->v_iflag & VI_OWEINACT) != 0) {
 				error = vinactive(vp);
 				if (error != 0 && error != ERELOOKUP)
@@ -14047,7 +14045,7 @@ schedule_cleanup(struct mount *mp)
 		/*
 		 * No ast is delivered to kernel threads, so nobody
 		 * would deref the mp.  Some kernel threads
-		 * explicitely check for AST, e.g. NFS daemon does
+		 * explicitly check for AST, e.g. NFS daemon does
 		 * this in the serving loop.
 		 */
 		return;
@@ -15006,9 +15004,15 @@ db_print_ffs(struct ufsmount *ump)
 {
 	db_printf("mp %p (%s) devvp %p\n", ump->um_mountp,
 	    ump->um_mountp->mnt_stat.f_mntonname, ump->um_devvp);
-	db_printf("    fs %p su_wl %d su_deps %d su_req %d\n",
-	    ump->um_fs, ump->softdep_on_worklist,
-	    ump->softdep_deps, ump->softdep_req);
+	db_printf("    fs %p ", ump->um_fs);
+
+	if (ump->um_softdep != NULL) {
+		db_printf("su_wl %d su_deps %d su_req %d\n",
+		    ump->softdep_on_worklist, ump->softdep_deps,
+		    ump->softdep_req);
+	} else {
+		db_printf("su disabled\n");
+	}
 }
 
 static void

@@ -146,37 +146,6 @@ pr251414_cleanup()
 	pft_cleanup
 }
 
-atf_test_case "network" "cleanup"
-network_head()
-{
-	atf_set descr 'Test <ifgroup>:network'
-	atf_set require.user root
-}
-
-network_body()
-{
-	pft_init
-
-	epair=$(vnet_mkepair)
-	ifconfig ${epair}a 192.0.2.1/24 up
-
-	vnet_mkjail alcatraz ${epair}b
-	jexec alcatraz ifconfig ${epair}b 192.0.2.2/24 up
-	jexec alcatraz pfctl -e
-
-	pft_set_rules alcatraz \
-		"table <allow> const { epair:network }"\
-		"block in" \
-		"pass in from <allow>"
-
-	atf_check -s exit:0 -o ignore ping -c 1 192.0.2.2
-}
-
-network_cleanup()
-{
-	pft_cleanup
-}
-
 atf_test_case "automatic" "cleanup"
 automatic_head()
 {
@@ -214,6 +183,37 @@ automatic_cleanup()
 	pft_cleanup
 }
 
+atf_test_case "network" "cleanup"
+network_head()
+{
+	atf_set descr 'Test <ifgroup>:network'
+	atf_set require.user root
+}
+
+network_body()
+{
+	pft_init
+
+	epair=$(vnet_mkepair)
+	ifconfig ${epair}a 192.0.2.1/24 up
+
+	vnet_mkjail alcatraz ${epair}b
+	jexec alcatraz ifconfig ${epair}b 192.0.2.2/24 up
+	jexec alcatraz pfctl -e
+
+	pft_set_rules alcatraz \
+		"table <allow> const { epair:network }"\
+		"block in" \
+		"pass in from <allow>"
+
+	atf_check -s exit:0 -o ignore ping -c 1 192.0.2.2
+}
+
+network_cleanup()
+{
+	pft_cleanup
+}
+
 atf_test_case "pr259689" "cleanup"
 pr259689_head()
 {
@@ -242,12 +242,91 @@ pr259689_cleanup()
 	pft_cleanup
 }
 
+atf_test_case "precreate" "cleanup"
+precreate_head()
+{
+	atf_set descr 'Test creating a table without counters, then loading rules that add counters'
+	atf_set require.user root
+}
+
+precreate_body()
+{
+	pft_init
+
+	vnet_mkjail alcatraz
+
+	jexec alcatraz pfctl -t foo -T add 192.0.2.1
+	jexec alcatraz pfctl -t foo -T show
+
+	pft_set_rules noflush alcatraz \
+		"table <foo> counters persist" \
+		"pass in from <foo>"
+
+	# Expect all counters to be zero
+	atf_check -s exit:0 -e ignore \
+	    -o match:'In/Block:.*'"$TABLE_STATS_ZERO_REGEXP" \
+	    -o match:'In/Pass:.*'"$TABLE_STATS_ZERO_REGEXP" \
+	    -o match:'Out/Block:.*'"$TABLE_STATS_ZERO_REGEXP" \
+	    -o match:'Out/Pass:.*'"$TABLE_STATS_ZERO_REGEXP" \
+	    jexec alcatraz pfctl -t foo -T show -vv
+
+}
+
+precreate_cleanup()
+{
+	pft_cleanup
+}
+
+atf_test_case "anchor" "cleanup"
+anchor_head()
+{
+	atf_set descr 'Test tables in anchors'
+	atf_set require.user root
+}
+
+anchor_body()
+{
+	pft_init
+
+	epair=$(vnet_mkepair)
+	ifconfig ${epair}a 192.0.2.1/24 up
+
+	vnet_mkjail alcatraz ${epair}b
+	jexec alcatraz ifconfig ${epair}b 192.0.2.2/24 up
+	jexec alcatraz pfctl -e
+
+	(echo "table <testtable> persist"
+	 echo "block in quick from <testtable> to any"
+	) | jexec alcatraz pfctl -a anchorage -f -
+
+	pft_set_rules noflush alcatraz \
+		"pass" \
+		"anchor anchorage"
+
+	atf_check -s exit:0 -o ignore ping -c 1 192.0.2.2
+
+	# Tables belong to anchors, so this is a different table and won't affect anything
+	jexec alcatraz pfctl -t testtable -T add 192.0.2.1
+	atf_check -s exit:0 -o ignore ping -c 1 192.0.2.2
+
+	# But when we add the address to the table in the anchor it does block traffic
+	jexec alcatraz pfctl -a anchorage -t testtable -T add 192.0.2.1
+	atf_check -s exit:2 -o ignore ping -c 1 192.0.2.2
+}
+
+anchor_cleanup()
+{
+	pft_cleanup
+}
+
 atf_init_test_cases()
 {
 	atf_add_test_case "v4_counters"
 	atf_add_test_case "v6_counters"
 	atf_add_test_case "pr251414"
-	atf_add_test_case "network"
 	atf_add_test_case "automatic"
+	atf_add_test_case "network"
 	atf_add_test_case "pr259689"
+	atf_add_test_case "precreate"
+	atf_add_test_case "anchor"
 }

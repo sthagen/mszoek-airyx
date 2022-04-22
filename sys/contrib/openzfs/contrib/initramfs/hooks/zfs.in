@@ -17,7 +17,6 @@ for req in "@sbindir@/zpool" "@sbindir@/zfs" "@mounthelperdir@/mount.zfs"; do
 	}
 done
 
-copy_exec "@sbindir@/zdb"
 copy_exec "@udevdir@/vdev_id"
 copy_exec "@udevdir@/zvol_id"
 if command -v systemd-ask-password > /dev/null; then
@@ -29,6 +28,13 @@ fi
 find /lib/ -type f -name "libgcc_s.so.[1-9]" | while read -r libgcc; do
 	copy_exec "$libgcc"
 done
+
+# shellcheck disable=SC2050
+if [ @LIBFETCH_DYNAMIC@ -gt 0 ]; then
+	find /lib/ -name "@LIBFETCH_SONAME@" | while read -r libfetch; do
+		copy_exec "$libfetch"
+	done
+fi
 
 copy_file config "/etc/hostid"
 copy_file cache  "@sysconfdir@/zfs/zpool.cache"

@@ -77,6 +77,8 @@ typedef enum {
     NSWindow *_mainWindow;
     NSMenu *_mainMenu;
     NSMenu *_windowsMenu;
+    mach_port_t _wsReplyPort;
+    mach_port_t _wsSvcPort;
 
     NSImage *_applicationIconImage;
 
@@ -91,8 +93,6 @@ typedef enum {
     void *_lock;
     NSMutableArray *_orderedWindows; // get rid of
     NSTimer *_attentionTimer;
-    DKConnection *dbusConnection;
-    DKMenu *dbusMenu;
 }
 
 + (NSApplication *)sharedApplication;

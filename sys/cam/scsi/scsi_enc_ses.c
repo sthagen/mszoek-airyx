@@ -422,7 +422,7 @@ ses_iter_init(enc_softc_t *enc, enc_cache_t *cache, struct ses_iterator *iter)
 
 /**
  * \brief Traverse the provided SES iterator to the next element
- *        within the configuraiton.
+ *        within the configuration.
  *
  * \param iter  The iterator to move.
  *
@@ -744,7 +744,7 @@ ses_elm_addlstatus_proto(struct ses_elm_addlstatus_base_hdr *hdr)
 int
 ses_elm_addlstatus_eip(struct ses_elm_addlstatus_base_hdr *hdr)
 {
-	return ((hdr)->byte0 >> 4) & 0x1;
+	return ((hdr)->byte0 >> 4 & 0x1);
 }
 int
 ses_elm_addlstatus_invalid(struct ses_elm_addlstatus_base_hdr *hdr)
@@ -982,6 +982,7 @@ ses_paths_iter(enc_softc_t *enc, enc_element_t *elm,
 			     != CAM_REQ_CMP)
 				return;
 
+			memset(&cgd, 0, sizeof(cgd));
 			xpt_setup_ccb(&cgd.ccb_h, path, CAM_PRIORITY_NORMAL);
 			cgd.ccb_h.func_code = XPT_GDEV_TYPE;
 			xpt_action((union ccb *)&cgd);
@@ -1043,6 +1044,7 @@ ses_setphyspath_callback(enc_softc_t *enc, enc_element_t *elm,
 	args = (ses_setphyspath_callback_args_t *)arg;
 	old_physpath = malloc(MAXPATHLEN, M_SCSIENC, M_WAITOK|M_ZERO);
 	xpt_path_lock(path);
+	memset(&cdai, 0, sizeof(cdai));
 	xpt_setup_ccb(&cdai.ccb_h, path, CAM_PRIORITY_NORMAL);
 	cdai.ccb_h.func_code = XPT_DEV_ADVINFO;
 	cdai.buftype = CDAI_TYPE_PHYS_PATH;
@@ -1103,6 +1105,7 @@ ses_set_physpath(enc_softc_t *enc, enc_element_t *elm,
 	 * Assemble the components of the physical path starting with
 	 * the device ID of the enclosure itself.
 	 */
+	memset(&cdai, 0, sizeof(cdai));
 	xpt_setup_ccb(&cdai.ccb_h, enc->periph->path, CAM_PRIORITY_NORMAL);
 	cdai.ccb_h.func_code = XPT_DEV_ADVINFO;
 	cdai.flags = CDAI_FLAG_NONE;
@@ -2749,13 +2752,6 @@ ses_init_enc(enc_softc_t *enc)
 }
 
 static int
-ses_get_enc_status(enc_softc_t *enc, int slpflag)
-{
-	/* Automatically updated, caller checks enc_cache->encstat itself */
-	return (0);
-}
-
-static int
 ses_set_enc_status(enc_softc_t *enc, uint8_t encstat, int slpflag)
 {
 	ses_control_request_t req;
@@ -2863,7 +2859,7 @@ ses_get_elm_devnames(enc_softc_t *enc, encioc_elm_devnames_t *elmdn)
  * \return	0 on success, errno otherwise.
  */
 static int
-ses_handle_string(enc_softc_t *enc, encioc_string_t *sstr, int ioc)
+ses_handle_string(enc_softc_t *enc, encioc_string_t *sstr, unsigned long ioc)
 {
 	enc_cache_t *enc_cache;
 	ses_cache_t *ses_cache;
@@ -2881,7 +2877,7 @@ ses_handle_string(enc_softc_t *enc, encioc_string_t *sstr, int ioc)
 	ses_cache = enc_cache->private;
 
 	/* Implement SES2r20 6.1.6 */
-	if (sstr->bufsiz > 0xffff)
+	if (sstr->bufsiz > ENC_STRING_MAX)
 		return (EINVAL); /* buffer size too large */
 
 	switch (ioc) {
@@ -2990,7 +2986,6 @@ static struct enc_vec ses_enc_vec =
 	.softc_invalidate	= ses_softc_invalidate,
 	.softc_cleanup		= ses_softc_cleanup,
 	.init_enc		= ses_init_enc,
-	.get_enc_status		= ses_get_enc_status,
 	.set_enc_status		= ses_set_enc_status,
 	.get_elm_status		= ses_get_elm_status,
 	.set_elm_status		= ses_set_elm_status,

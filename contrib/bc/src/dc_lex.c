@@ -130,7 +130,8 @@ static void dc_lex_string(BcLex *l) {
 		}
 
 		if (BC_ERR(c == '\0' && depth)) {
-			if (!vm.eof && l->is_stdin) got_more = bc_lex_readLine(l);
+			if (!vm.eof && (l->is_stdin || l->is_exprs))
+				got_more = bc_lex_readLine(l);
 			if (got_more) bc_vec_popAll(&l->str);
 		}
 
@@ -156,6 +157,8 @@ void dc_lex_token(BcLex *l) {
 
 	char c = l->buf[l->i++], c2;
 	size_t i;
+
+	BC_SIG_ASSERT_LOCKED;
 
 	// If the last token was a command that needs a register, we need to parse a
 	// register, so do so.

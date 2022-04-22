@@ -15,8 +15,8 @@ SRCS=	sshd.c auth-rhosts.c auth-passwd.c \
 	auth2-none.c auth2-passwd.c auth2-pubkey.c \
 	monitor.c monitor_wrap.c auth-krb5.c \
 	auth2-gss.c gss-serv.c gss-serv-krb5.c \
-	loginrec.c auth-pam.c auth-shadow.c auth-sia.c md5crypt.c \
-	sftp-server.c sftp-common.c \
+	loginrec.c auth-pam.c auth-shadow.c auth-sia.c \
+	srclimit.c sftp-server.c sftp-common.c \
 	sandbox-null.c sandbox-rlimit.c sandbox-systrace.c sandbox-darwin.c \
 	sandbox-seccomp-filter.c sandbox-capsicum.c sandbox-pledge.c \
 	sandbox-solaris.c uidswap.c
@@ -39,10 +39,11 @@ CFLAGS+=	-DHAVE_LDNS=1
 #LDADD+=	-lldns
 .endif
 
-.if ${MK_AUDIT} != "no"
-CFLAGS+= -DUSE_BSM_AUDIT=1 -DHAVE_GETAUDIT_ADDR=1
-LIBADD+=	bsm System notify
-.endif
+# Temporarily removed due to auditd/asld instability (2022-2-15 mszoek)
+#.if ${MK_AUDIT} != "no"
+#CFLAGS+= -DUSE_BSM_AUDIT=1 -DHAVE_GETAUDIT_ADDR=1
+#LIBADD+=	bsm System notify
+#.endif
 
 .if ${MK_BLACKLIST_SUPPORT} != "no"
 CFLAGS+= -DUSE_BLACKLIST=1 -I${SRCTOP}/contrib/blacklist/include
@@ -64,9 +65,9 @@ LIBADD+=	wrap
 
 LIBADD+=	crypto
 
-.if defined(LOCALBASE)
-CFLAGS+= -DXAUTH_PATH=\"${LOCALBASE}/bin/xauth\"
-.endif
+#.if defined(LOCALBASE)
+#CFLAGS+= -DXAUTH_PATH=\"${LOCALBASE}/bin/xauth\"
+#.endif
 
 .include <bsd.prog.mk>
 

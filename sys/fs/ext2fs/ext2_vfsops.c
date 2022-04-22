@@ -240,10 +240,10 @@ ext2_mount(struct mount *mp)
 	 */
 	if (fspec == NULL)
 		return (EINVAL);
-	NDINIT(ndp, LOOKUP, FOLLOW | LOCKLEAF, UIO_SYSSPACE, fspec, td);
+	NDINIT(ndp, LOOKUP, FOLLOW | LOCKLEAF, UIO_SYSSPACE, fspec);
 	if ((error = namei(ndp)) != 0)
 		return (error);
-	NDFREE(ndp, NDF_ONLY_PNBUF);
+	NDFREE_PNBUF(ndp);
 	devvp = ndp->ni_vp;
 
 	if (!vn_isdisk_error(devvp, &error)) {
@@ -464,13 +464,6 @@ ext2_compute_sb_data(struct vnode *devvp, struct ext2fs *es,
 	int i, j;
 	int g_count = 0;
 	int error;
-
-	/* Check if first dblock is valid */
-	if (fs->e2fs->e2fs_bcount >= 1024 && fs->e2fs->e2fs_first_dblock) {
-		SDT_PROBE1(ext2fs, , vfsops, ext2_compute_sb_data_error,
-		    "first dblock is invalid");
-		return (EINVAL);
-	}
 
 	/* Check checksum features */
 	if (EXT2_HAS_RO_COMPAT_FEATURE(fs, EXT2F_ROCOMPAT_GDT_CSUM) &&
@@ -1237,6 +1230,7 @@ ext2_vget(struct mount *mp, ino_t ino, int flags, struct vnode **vpp)
 	ip->i_e2fs = fs = ump->um_e2fs;
 	ip->i_ump = ump;
 	ip->i_number = ino;
+	cluster_init_vn(&ip->i_clusterw);
 
 	lockmgr(vp->v_vnlock, LK_EXCLUSIVE, NULL);
 	error = insmntque(vp, mp);
@@ -1290,11 +1284,18 @@ ext2_vget(struct mount *mp, ino_t ino, int flags, struct vnode **vpp)
 		for (i = used_blocks; i < EXT2_NDIR_BLOCKS; i++)
 			ip->i_db[i] = 0;
 	}
+
+	bqrelse(bp);
+
 #ifdef EXT2FS_PRINT_EXTENTS
 	ext2_print_inode(ip);
-	ext4_ext_print_extent_tree_status(ip);
+	error = ext4_ext_walk(ip);
+	if (error) {
+		vput(vp);
+		*vpp = NULL;
+		return (error);
+	}
 #endif
-	bqrelse(bp);
 
 	/*
 	 * Initialize the vnode from the inode, check for aliases.

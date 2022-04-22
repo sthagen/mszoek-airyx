@@ -186,9 +186,11 @@ void bc_vm_info(const char* const help) {
 			                        "disabled";
 			const char* const prompt = BC_DEFAULT_PROMPT ? "enabled" :
 			                           "disabled";
+			const char* const expr = BC_DEFAULT_EXPR_EXIT ? "to exit" :
+			                           "to not exit";
 
 			bc_file_printf(&vm.fout, help, vm.name, vm.name, BC_VERSION,
-			               BC_BUILD_TYPE, banner, sigint, tty, prompt);
+			               BC_BUILD_TYPE, banner, sigint, tty, prompt, expr);
 		}
 #endif // BC_ENABLED
 
@@ -201,9 +203,11 @@ void bc_vm_info(const char* const help) {
 			                        "disabled";
 			const char* const prompt = DC_DEFAULT_PROMPT ? "enabled" :
 			                           "disabled";
+			const char* const expr = DC_DEFAULT_EXPR_EXIT ? "to exit" :
+			                           "to not exit";
 
 			bc_file_printf(&vm.fout, help, vm.name, vm.name, BC_VERSION,
-			               BC_BUILD_TYPE, sigint, tty, prompt);
+			               BC_BUILD_TYPE, sigint, tty, prompt, expr);
 		}
 #endif // DC_ENABLED
 	}
@@ -552,6 +556,8 @@ void bc_vm_shutdown(void) {
 
 void bc_vm_addTemp(BcDig *num) {
 
+	BC_SIG_ASSERT_LOCKED;
+
 	// If we don't have room, just free.
 	if (vm.temps_len == BC_VM_MAX_TEMPS) free(num);
 	else {
@@ -563,8 +569,13 @@ void bc_vm_addTemp(BcDig *num) {
 }
 
 BcDig* bc_vm_takeTemp(void) {
+
+	BC_SIG_ASSERT_LOCKED;
+
 	if (!vm.temps_len) return NULL;
+
 	vm.temps_len -= 1;
+
 	return temps_buf[vm.temps_len];
 }
 
@@ -660,8 +671,9 @@ char* bc_vm_strdup(const char *str) {
 void bc_vm_printf(const char *fmt, ...) {
 
 	va_list args;
+	sig_atomic_t lock;
 
-	BC_SIG_LOCK;
+	BC_SIG_TRYLOCK(lock);
 
 	va_start(args, fmt);
 	bc_file_vprintf(&vm.fout, fmt, args);
@@ -669,7 +681,7 @@ void bc_vm_printf(const char *fmt, ...) {
 
 	vm.nchars = 0;
 
-	BC_SIG_UNLOCK;
+	BC_SIG_TRYUNLOCK(lock);
 }
 #endif // !BC_ENABLE_LIBRARY
 
@@ -745,6 +757,8 @@ static void bc_vm_clean(void) {
 	BcInstPtr *ip = bc_vec_item(&vm.prog.stack, 0);
 	bool good = ((vm.status && vm.status != BC_STATUS_QUIT) || vm.sig);
 
+	BC_SIG_ASSERT_LOCKED;
+
 	// If all is good, go ahead and reset.
 	if (good) bc_program_reset(&vm.prog);
 
@@ -808,13 +822,17 @@ static void bc_vm_clean(void) {
  * Process a bunch of text.
  * @param text      The text to process.
  * @param is_stdin  True if the text came from stdin, false otherwise.
+ * @param is_exprs  True if the text is from command-line expressions, false
+ *                  otherwise.
  */
-static void bc_vm_process(const char *text, bool is_stdin) {
+static void bc_vm_process(const char *text, bool is_stdin, bool is_exprs) {
 
 	// Set up the parser.
-	bc_parse_text(&vm.prs, text, is_stdin);
+	bc_parse_text(&vm.prs, text, is_stdin, is_exprs);
 
 	do {
+
+		BC_SIG_LOCK;
 
 #if BC_ENABLED
 		// If the first token is the keyword define, then we need to do this
@@ -825,8 +843,10 @@ static void bc_vm_process(const char *text, bool is_stdin) {
 		// Parse it all.
 		while (BC_PARSE_CAN_PARSE(vm.prs)) vm.parse(&vm.prs);
 
+		BC_SIG_UNLOCK;
+
 		// Execute if possible.
-		if(BC_IS_DC || !BC_PARSE_NO_EXEC(&vm.prs)) bc_program_exec(&vm.prog);
+		if (BC_IS_DC || !BC_PARSE_NO_EXEC(&vm.prs)) bc_program_exec(&vm.prog);
 
 		assert(BC_IS_DC || vm.prog.results.len == 0);
 
@@ -875,7 +895,7 @@ static void bc_vm_file(const char *file) {
 	BC_SIG_UNLOCK;
 
 	// Process it.
-	bc_vm_process(data, false);
+	bc_vm_process(data, false, false);
 
 #if BC_ENABLED
 	// Make sure to end any open if statements.
@@ -900,6 +920,8 @@ bool bc_vm_readLine(bool clear) {
 
 	BcStatus s;
 	bool good;
+
+	BC_SIG_ASSERT_NOT_LOCKED;
 
 	// Clear the buffer if desired.
 	if (clear) bc_vec_empty(&vm.buffer);
@@ -937,12 +959,14 @@ static void bc_vm_stdin(void) {
 	// Set up the lexer.
 	bc_lex_file(&vm.prs.l, bc_program_stdin_name);
 
-	// These are global so that the dc lexer can access them, but they are tied
-	// to this function, really. Well, this and bc_vm_readLine(). These are the
-	// reason that we have vm.is_stdin to tell the dc lexer if we are reading
-	// from stdin. Well, both lexers care. And the reason they care is so that
-	// if a comment or a string goes across multiple lines, the lexer can
-	// request more data from stdin until the comment or string is ended.
+	// These are global so that the lexers can access them, but they are
+	// allocated and freed in this function because they should only be used for
+	// stdin and expressions (they are used in bc_vm_exprs() as well). So they
+	// are tied to this function, really. Well, this and bc_vm_readLine(). These
+	// are the reasons that we have vm.is_stdin to tell the lexers if we are
+	// reading from stdin. Well, both lexers care. And the reason they care is
+	// so that if a comment or a string goes across multiple lines, the lexer
+	// can request more data from stdin until the comment or string is ended.
 	BC_SIG_LOCK;
 	bc_vec_init(&vm.buffer, sizeof(uchar), BC_DTOR_NONE);
 	bc_vec_init(&vm.line_buf, sizeof(uchar), BC_DTOR_NONE);
@@ -966,10 +990,14 @@ restart:
 		if (!clear) continue;
 
 		// Process the data.
-		bc_vm_process(vm.buffer.v, true);
+		bc_vm_process(vm.buffer.v, true, false);
 
 		if (vm.eof) break;
-		else bc_vm_clean();
+		else {
+			BC_SIG_LOCK;
+			bc_vm_clean();
+			BC_SIG_UNLOCK;
+		}
 	}
 
 #if BC_ENABLED
@@ -978,6 +1006,7 @@ restart:
 #endif // BC_ENABLED
 
 err:
+
 	BC_SIG_MAYLOCK;
 
 	// Cleanup.
@@ -1002,10 +1031,80 @@ err:
 	}
 
 #ifndef NDEBUG
-	// Since these are tied to this function, free them here.
+	// Since these are tied to this function, free them here. We only free in
+	// debug mode because stdin is always the last thing read.
 	bc_vec_free(&vm.line_buf);
 	bc_vec_free(&vm.buffer);
 #endif // NDEBUG
+
+	BC_LONGJMP_CONT;
+}
+
+bool bc_vm_readBuf(bool clear) {
+
+	size_t len = vm.exprs.len - 1;
+	bool more;
+
+	BC_SIG_ASSERT_NOT_LOCKED;
+
+	// Clear the buffer if desired.
+	if (clear) bc_vec_empty(&vm.buffer);
+
+	// We want to pop the nul byte off because that's what bc_read_buf()
+	// expects.
+	bc_vec_pop(&vm.buffer);
+
+	// Read one line of expressions.
+	more = bc_read_buf(&vm.buffer, vm.exprs.v, &len);
+	bc_vec_pushByte(&vm.buffer, '\0');
+
+	return more;
+}
+
+static void bc_vm_exprs(void) {
+
+	bool clear = true;
+
+	// Prepare the lexer.
+	bc_lex_file(&vm.prs.l, bc_program_exprs_name);
+
+	// We initialize this so that the lexer can access it in the case that it
+	// needs more data for expressions, such as for a multiline string or
+	// comment. See the comment on the allocation of vm.buffer above in
+	// bc_vm_stdin() for more information.
+	BC_SIG_LOCK;
+	bc_vec_init(&vm.buffer, sizeof(uchar), BC_DTOR_NONE);
+	BC_SETJMP_LOCKED(err);
+	BC_SIG_UNLOCK;
+
+	while (bc_vm_readBuf(clear)) {
+
+		size_t len = vm.buffer.len - 1;
+		const char *str = vm.buffer.v;
+
+		// We don't want to clear the buffer when the line ends with a backslash
+		// because a backslash newline is special in bc.
+		clear = (len < 2 || str[len - 2] != '\\' || str[len - 1] != '\n');
+		if (!clear) continue;
+
+		// Process the data.
+		bc_vm_process(vm.buffer.v, false, true);
+	}
+
+	// If we were not supposed to clear, then we should process everything. This
+	// makes sure that errors get reported.
+	if (!clear) bc_vm_process(vm.buffer.v, false, true);
+
+err:
+
+	BC_SIG_MAYLOCK;
+
+	// Cleanup.
+	bc_vm_clean();
+
+	// Since this is tied to this function, free it here. We always free it here
+	// because bc_vm_stdin() may or may not use it later.
+	bc_vec_free(&vm.buffer);
 
 	BC_LONGJMP_CONT;
 }
@@ -1020,9 +1119,13 @@ err:
 static void bc_vm_load(const char *name, const char *text) {
 
 	bc_lex_file(&vm.prs.l, name);
-	bc_parse_text(&vm.prs, text, false);
+	bc_parse_text(&vm.prs, text, false, false);
+
+	BC_SIG_LOCK;
 
 	while (vm.prs.l.t != BC_LEX_EOF) vm.parse(&vm.prs);
+
+	BC_SIG_UNLOCK;
 }
 
 #endif // BC_ENABLED
@@ -1106,7 +1209,6 @@ static void bc_vm_exec(void) {
 
 	size_t i;
 	bool has_file = false;
-	BcVec buf;
 
 #if BC_ENABLED
 	// Load the math libraries.
@@ -1133,46 +1235,11 @@ static void bc_vm_exec(void) {
 	// If there are expressions to execute...
 	if (vm.exprs.len) {
 
-		size_t len = vm.exprs.len - 1;
-		bool more;
-
-		BC_SIG_LOCK;
-
-		// Create this as a buffer for reading into.
-		bc_vec_init(&buf, sizeof(uchar), BC_DTOR_NONE);
-
-#ifndef NDEBUG
-		BC_SETJMP_LOCKED(err);
-#endif // NDEBUG
-
-		BC_SIG_UNLOCK;
-
-		// Prepare the lexer.
-		bc_lex_file(&vm.prs.l, bc_program_exprs_name);
-
-		// Process the expressions one at a time.
-		do {
-
-			more = bc_read_buf(&buf, vm.exprs.v, &len);
-			bc_vec_pushByte(&buf, '\0');
-			bc_vm_process(buf.v, false);
-
-			bc_vec_popAll(&buf);
-
-		} while (more);
-
-		BC_SIG_LOCK;
-
-		bc_vec_free(&buf);
-
-#ifndef NDEBUG
-		BC_UNSETJMP;
-#endif // NDEBUG
-
-		BC_SIG_UNLOCK;
+		// Process the expressions.
+		bc_vm_exprs();
 
 		// Sometimes, executing expressions means we need to quit.
-		if (!vm.no_exprs && vm.exit_exprs) return;
+		if (!vm.no_exprs && vm.exit_exprs && BC_EXPR_EXIT) return;
 	}
 
 	// Process files.
@@ -1194,9 +1261,7 @@ static void bc_vm_exec(void) {
 
 	// We need to keep tty if history is enabled, and we need to keep rpath for
 	// the times when we read from /dev/urandom.
-	if (BC_TTY && !vm.history.badTerm) {
-		bc_pledge(bc_pledge_end_history, NULL);
-	}
+	if (BC_TTY && !vm.history.badTerm) bc_pledge(bc_pledge_end_history, NULL);
 	else
 #endif // BC_ENABLE_HISTORY
 	{
@@ -1213,18 +1278,6 @@ static void bc_vm_exec(void) {
 
 	// Execute from stdin. bc always does.
 	if (BC_IS_BC || !has_file) bc_vm_stdin();
-
-// These are all protected by ifndef NDEBUG because if these are needed, bc is
-// going to exit anyway, and I see no reason to include this code in a release
-// build when the OS is going to free all of the resources anyway.
-#ifndef NDEBUG
-	return;
-
-err:
-	BC_SIG_MAYLOCK;
-	bc_vec_free(&buf);
-	BC_LONGJMP_CONT;
-#endif // NDEBUG
 }
 
 void bc_vm_boot(int argc, char *argv[]) {
@@ -1233,6 +1286,8 @@ void bc_vm_boot(int argc, char *argv[]) {
 	bool tty;
 	const char* const env_len = BC_IS_BC ? "BC_LINE_LENGTH" : "DC_LINE_LENGTH";
 	const char* const env_args = BC_IS_BC ? "BC_ENV_ARGS" : "DC_ENV_ARGS";
+	const char* const env_exit = BC_IS_BC ? "BC_EXPR_EXIT" : "DC_EXPR_EXIT";
+	int env_exit_def = BC_IS_BC ? BC_DEFAULT_EXPR_EXIT : DC_DEFAULT_EXPR_EXIT;
 
 	// We need to know which of stdin, stdout, and stderr are tty's.
 	ttyin = isatty(STDIN_FILENO);
@@ -1269,6 +1324,8 @@ void bc_vm_boot(int argc, char *argv[]) {
 	// Set the line length by environment variable.
 	vm.line_len = (uint16_t) bc_vm_envLen(env_len);
 
+	bc_vm_setenvFlag(env_exit, env_exit_def, BC_FLAG_EXPR_EXIT);
+
 	// Clear the files and expressions vectors, just in case. This marks them as
 	// *not* allocated.
 	bc_vec_clear(&vm.files);
@@ -1289,26 +1346,22 @@ void bc_vm_boot(int argc, char *argv[]) {
 	bc_program_init(&vm.prog);
 	bc_parse_init(&vm.prs, &vm.prog, BC_PROG_MAIN);
 
-#if BC_ENABLED
-	// bc checks this environment variable to see if it should run in standard
-	// mode.
-	if (BC_IS_BC) {
-
-		char* var = bc_vm_getenv("POSIXLY_CORRECT");
-
-		vm.flags |= BC_FLAG_S * (var != NULL);
-		bc_vm_getenvFree(var);
-	}
-#endif // BC_ENABLED
-
 	// Set defaults.
 	vm.flags |= BC_TTY ? BC_FLAG_P | BC_FLAG_R : 0;
 	vm.flags |= BC_I ? BC_FLAG_Q : 0;
 
 #if BC_ENABLED
-	if (BC_IS_BC && BC_I) {
+	if (BC_IS_BC) {
+
+		// bc checks this environment variable to see if it should run in
+		// standard mode.
+		char* var = bc_vm_getenv("POSIXLY_CORRECT");
+
+		vm.flags |= BC_FLAG_S * (var != NULL);
+		bc_vm_getenvFree(var);
+
 		// Set whether we print the banner or not.
-		bc_vm_setenvFlag("BC_BANNER", BC_DEFAULT_BANNER, BC_FLAG_Q);
+		if (BC_I) bc_vm_setenvFlag("BC_BANNER", BC_DEFAULT_BANNER, BC_FLAG_Q);
 	}
 #endif // BC_ENABLED
 
@@ -1349,9 +1402,7 @@ void bc_vm_boot(int argc, char *argv[]) {
 #if BC_ENABLED
 	// Disable global stacks in POSIX mode.
 	if (BC_IS_POSIX) vm.flags &= ~(BC_FLAG_G);
-#endif // BC_ENABLED
 
-#if BC_ENABLED
 	// Print the banner if allowed. We have to be in bc, in interactive mode,
 	// and not be quieted by command-line option or environment variable.
 	if (BC_IS_BC && BC_I && (vm.flags & BC_FLAG_Q)) {

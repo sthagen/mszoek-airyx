@@ -14,6 +14,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 #import <AppKit/NSMenuView.h>
 #import <AppKit/NSToolbarView.h>
 #import <AppKit/NSMainMenuView.h>
+#import <AppKit/NSAttributedString.h>
+#import <Onyx2D/O2Context.h>
 
 @interface NSWindow(private)
 -(BOOL)hasMainMenu;
@@ -36,11 +38,12 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 }
 
 -(void)drawRect:(NSRect)rect {
-   NSRect bounds=[self bounds];
-   float cheatSheet = 0;
+    NSRect bounds = [NSWindow contentRectForFrameRect:[self bounds]
+        styleMask:[[self window] styleMask]];
+    float cheatSheet = 0;
 
-   [[[self window] backgroundColor] setFill];
-   NSRectFill(bounds);
+    [[[self window] backgroundColor] setFill];
+    NSRectFill(bounds);
    
     switch(_borderType){
         case NSNoBorder:
@@ -58,10 +61,68 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             bounds = NSInsetRect(bounds, 2, 2);
             cheatSheet = 2;
             break;
-   }
+    }
+
+    if(([[self window] styleMask]  & 0x0FFF) == NSBorderlessWindowMask)
+        return;
     
-   if([[self window] isSheet])
-    bounds.size.height += cheatSheet;
+    if([[self window] isSheet])
+        bounds.size.height += cheatSheet;
+
+    O2Context *_context = [[self window] cgContext];
+    O2ContextSetGrayStrokeColor(_context, 0.999, 1);
+    O2ContextSetGrayFillColor(_context, 0.999, 1);
+
+    // let's round these corners
+    float radius = 12;
+    O2ContextBeginPath(_context);
+    O2ContextMoveToPoint(_context, _frame.origin.x+radius, NSMaxY(_frame));
+    O2ContextAddArc(_context, _frame.origin.x + _frame.size.width - radius,
+        _frame.origin.y + _frame.size.height - radius, radius, 1.5708 /*radians*/,
+        0 /*radians*/, YES);
+    O2ContextAddLineToPoint(_context, _frame.origin.x + _frame.size.width,
+        _frame.origin.y);
+    O2ContextAddArc(_context, _frame.origin.x + _frame.size.width - radius,
+        _frame.origin.y + radius, radius, 6.28319 /*radians*/, 4.71239 /*radians*/,
+        YES);
+    O2ContextAddLineToPoint(_context, _frame.origin.x, _frame.origin.y);
+    O2ContextAddArc(_context, _frame.origin.x + radius, _frame.origin.y + radius,
+        radius, 4.71239, 3.14159, YES);
+    O2ContextAddLineToPoint(_context, _frame.origin.x,
+        _frame.origin.y + _frame.size.height);
+    O2ContextAddArc(_context, _frame.origin.x + radius, _frame.origin.y +
+        _frame.size.height - radius, radius, 3.14159, 1.5708, YES);
+    O2ContextAddLineToPoint(_context, _frame.origin.x, NSMaxY(_frame));
+    O2ContextClosePath(_context);
+    O2ContextFillPath(_context);
+
+    // window controls
+    CGRect button = NSMakeRect(12, _frame.size.height - 26, 16, 16);
+    O2ContextSetRGBFillColor(_context, 1, 0, 0, 1);
+    O2ContextFillEllipseInRect(_context, button);
+    O2ContextSetRGBFillColor(_context, 1, 0.9, 0, 1);
+    button.origin.x += 26;
+    O2ContextFillEllipseInRect(_context, button);
+    O2ContextSetRGBFillColor(_context, 0, 1, 0, 1);
+    button.origin.x += 26;
+    O2ContextFillEllipseInRect(_context, button);
+
+    // title
+    NSString *t = [[self window] title];
+    if(t) {
+        NSDictionary *attrs = @{
+            NSFontAttributeName : [NSFont titleBarFontOfSize:18.0],
+            NSForegroundColorAttributeName : [NSColor darkGrayColor]
+        };
+        NSAttributedString *title = [[NSAttributedString alloc] initWithString:t attributes:attrs];
+        NSSize size = [title size];
+        NSRect titleRect = NSMakeRect(
+            _frame.size.width / 2 - size.width / 2,
+            _frame.size.height - 40 + size.height / 2,
+            _frame.size.width / 2 + size.width / 2,
+            _frame.size.height - 4);
+        [title drawInRect:titleRect];
+    }
 
    [[[self window] backgroundColor] setFill];
    NSRectFill([[[self window] contentView] frame]);
@@ -113,22 +174,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 }
 
 -(void)mouseDown:(NSEvent *)event {
+    // FIXME: only if on titlebar or movable by background
+    [[self window] requestMove:event];
+
    if(![[self window] isMovableByWindowBackground])
     return;
-   
-   NSPoint origin=[[self window] frame].origin;
-   NSPoint firstLocation=[[self window] convertBaseToScreen:[event locationInWindow]];
-   do {
-    event=[[self window] nextEventMatchingMask:NSLeftMouseUpMask|NSLeftMouseDraggedMask];
-    
-    NSPoint delta=[[self window] convertBaseToScreen:[event locationInWindow]];
-    
-    delta.x-=firstLocation.x;
-    delta.y-=firstLocation.y;
-    
-    [[self window] setFrameOrigin:NSMakePoint(origin.x+delta.x,origin.y+delta.y)];
-    
-   }while([event type]!=NSLeftMouseUp);   
 }
 
 @end

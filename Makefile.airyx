@@ -5,29 +5,13 @@ AIRYX_CODENAME!= sed -e '2q;d' ${TOPDIR}/version.txt
 CORES!= sysctl -n hw.ncpu
 .export TOPDIR BUILDROOT PORTSROOT AIRYX_VERSION AIRYX_CODENAME CORES
 
-SUBDIR+=	Library \
-		Frameworks
-
-SUBDIR+=	.WAIT \
-		installairyx \
-		sysmenu \
-		CoreServices \
-		bin/open
+MK_WERROR=      no
+WARNS=          1
+SUBDIR=		Library Frameworks .WAIT installairyx \
+		CoreServices bin/open
+#		sysmenu CoreServices bin/open
 
 # We need the installed frameworks to correctly link CoreServices and applications
-airyx: airyxbase installairyx sysmenu coreservices bin
-
-airyxbase:
-	tar -C ${BUILDROOT}/usr/lib -cpf pkgconfig | tar -C ${BUILDROOT}/usr/share -xpf -
-	rm -rf ${BUILDROOT}/usr/lib/pkgconfig
-
-airyx-package:
-	${SUDO} mkdir -p ${TOPDIR}/dist
-	${SUDO} tar cvJ -C ${BUILDROOT} --gid 0 --uid 0 -f ${TOPDIR}/dist/airyx.txz .
-
-installairyx: all_subdir_installairyx
-all_subdir_installairyx: airyx-package
-	${SUDO} tar -C / -xvf ${TOPDIR}/dist/airyx.txz
 
 prep:
 	mkdir -p ${OBJPREFIX} ${TOPDIR}/dist ${BUILDROOT}

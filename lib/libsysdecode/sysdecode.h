@@ -28,14 +28,16 @@
 #ifndef __SYSDECODE_H__
 #define	__SYSDECODE_H__
 
+#include <sys/types.h>
+#include <stdbool.h>
+#include <stdio.h>
+
 enum sysdecode_abi {
 	SYSDECODE_ABI_UNKNOWN = 0,
 	SYSDECODE_ABI_FREEBSD,
 	SYSDECODE_ABI_FREEBSD32,
 	SYSDECODE_ABI_LINUX,
 	SYSDECODE_ABI_LINUX32,
-	SYSDECODE_ABI_CLOUDABI64,
-	SYSDECODE_ABI_CLOUDABI32
 };
 
 int	sysdecode_abi_to_freebsd_errno(enum sysdecode_abi _abi, int _error);
@@ -45,6 +47,7 @@ const char *sysdecode_atfd(int _fd);
 bool	sysdecode_atflags(FILE *_fp, int _flags, int *_rem);
 bool	sysdecode_cap_fcntlrights(FILE *_fp, uint32_t _rights, uint32_t *_rem);
 void	sysdecode_cap_rights(FILE *_fp, cap_rights_t *_rightsp);
+bool	sysdecode_close_range_flags(FILE *_fp, int _flags, int *_rem);
 const char *sysdecode_cmsg_type(int _cmsg_level, int _cmsg_type);
 const char *sysdecode_extattrnamespace(int _namespace);
 const char *sysdecode_fadvice(int _advice);

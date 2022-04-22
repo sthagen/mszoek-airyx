@@ -2,7 +2,6 @@
  * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
  *
  * Copyright (c) 2009 The FreeBSD Foundation 
- * All rights reserved. 
  * 
  * This software was developed by Rui Paulo under sponsorship from the
  * FreeBSD Foundation. 
@@ -2960,7 +2959,7 @@ mesh_send_action_meshgate(struct ieee80211_node *ni,
 		 * mesh link metric
 		 *   [1] category
 		 *   [1] action
-		 *   [tlv] mesh gate annoucement
+		 *   [tlv] mesh gate announcement
 		 */
 		*frm++ = category;
 		*frm++ = action;

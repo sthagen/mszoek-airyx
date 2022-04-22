@@ -26,6 +26,8 @@
 #include <time.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <signal.h>
+
 #include "zed_exec.h"
 #include "zed_log.h"
 #include "zed_strings.h"
@@ -185,11 +187,14 @@ _zed_exec_fork_child(uint64_t eid, const char *dir, const char *prog,
 
 static void
 _nop(int sig)
-{}
+{
+	(void) sig;
+}
 
 static void *
 _reap_children(void *arg)
 {
+	(void) arg;
 	struct launched_process_node node, *pnode;
 	pid_t pid;
 	int status;

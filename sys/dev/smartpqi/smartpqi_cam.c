@@ -507,7 +507,7 @@ os_aio_response_error(rcb_t *rcb, aio_path_error_info_elem_t *err_info)
 		unsigned sense_data_len = LE_16(err_info->data_len);
 		if (sense_data_len)
 			sense_data = err_info->data;
-		DBG_ERR_BTL(rcb->dvp, "SCSI_STATUS_CHECK_COND  sense size %u\n",
+		DBG_INFO("SCSI_STATUS_CHECK_COND  sense size %u\n",
 			sense_data_len);
 		copy_sense_data_to_csio(csio, sense_data, sense_data_len);
 		csio->ccb_h.status = CAM_SCSI_STATUS_ERROR | CAM_AUTOSNS_VALID;
@@ -1204,7 +1204,7 @@ register_sim(struct pqisrc_softstate *softs, int card_index)
 {
 	int max_transactions;
 	union ccb   *ccb = NULL;
-	cam_status status = 0;
+	int error;
 	struct ccb_setasync csa;
 	struct cam_sim *sim;
 
@@ -1231,9 +1231,9 @@ register_sim(struct pqisrc_softstate *softs, int card_index)
 
 	softs->os_specific.sim = sim;
 	mtx_lock(&softs->os_specific.cam_lock);
-	status = xpt_bus_register(sim, softs->os_specific.pqi_dev, 0);
-	if (status != CAM_SUCCESS) {
-		DBG_ERR("xpt_bus_register failed status=%d\n", status);
+	error = xpt_bus_register(sim, softs->os_specific.pqi_dev, 0);
+	if (error != CAM_SUCCESS) {
+		DBG_ERR("xpt_bus_register failed errno %d\n", error);
 		cam_sim_free(softs->os_specific.sim, FALSE);
 		cam_simq_free(softs->os_specific.devq);
 		mtx_unlock(&softs->os_specific.cam_lock);

@@ -201,14 +201,14 @@ struct vm_object {
 #define	OBJ_UMTXDEAD	0x0020		/* umtx pshared was terminated */
 #define	OBJ_SIZEVNLOCK	0x0040		/* lock vnode to check obj size */
 #define	OBJ_PG_DTOR	0x0080		/* dont reset object, leave that for dtor */
-#define	OBJ_PAGERPRIV2	0x0100		/* Pager private */
+#define	OBJ_SHADOWLIST	0x0100		/* Object is on the shadow list. */
 #define	OBJ_SWAP	0x0200		/* object swaps */
 #define	OBJ_SPLIT	0x0400		/* object is being split */
 #define	OBJ_COLLAPSING	0x0800		/* Parent of collapse. */
 #define	OBJ_COLORED	0x1000		/* pg_color is defined */
 #define	OBJ_ONEMAPPING	0x2000		/* One USE (a single, non-forked) mapping flag */
 #define	OBJ_PAGERPRIV1	0x4000		/* Pager private */
-#define	OBJ_SHADOWLIST	0x8000		/* Object is on the shadow list. */
+#define	OBJ_PAGERPRIV2	0x8000		/* Pager private */
 
 /*
  * Helpers to perform conversion between vm_object page indexes and offsets.
@@ -391,6 +391,7 @@ boolean_t vm_object_sync(vm_object_t, vm_ooffset_t, vm_size_t, boolean_t,
 void vm_object_unwire(vm_object_t object, vm_ooffset_t offset,
     vm_size_t length, uint8_t queue);
 struct vnode *vm_object_vnode(vm_object_t object);
+bool vm_object_is_active(vm_object_t obj);
 #endif				/* _KERNEL */
 
 #endif				/* _VM_OBJECT_ */

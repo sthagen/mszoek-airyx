@@ -108,6 +108,8 @@ local_qsort(void *a, size_t n, size_t es, cmp_t *cmp, void *thunk)
 	int cmp_result;
 	int swap_cnt;
 
+	if (__predict_false(n == 0))
+		return;
 loop:
 	swap_cnt = 0;
 	if (n < 7) {
@@ -171,7 +173,12 @@ loop:
 	pn = (char *)a + n * es;
 	d1 = MIN(pa - (char *)a, pb - pa);
 	vecswap(a, pb - d1, d1);
-	d1 = MIN(pd - pc, pn - pd - es);
+	/*
+	 * Cast es to preserve signedness of right-hand side of MIN()
+	 * expression, to avoid sign ambiguity in the implied comparison.  es
+	 * is safely within [0, SSIZE_MAX].
+	 */
+	d1 = MIN(pd - pc, pn - pd - (ssize_t)es);
 	vecswap(pb, pn - d1, d1);
 
 	d1 = pb - pa;
