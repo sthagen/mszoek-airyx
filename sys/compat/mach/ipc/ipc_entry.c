@@ -707,7 +707,10 @@ ipc_entry_list_close(void *arg __unused, struct proc *p)
 	 **/
 	KASSERT(fdp->fd_refcnt == 1, ("the fdtable should not be shared"));
 
-	for (i = 0; i <= fdlastfile(fdp); i++) {
+	FILEDESC_SLOCK(fdp);
+	int lastfile = fdlastfile(fdp);
+	FILEDESC_SUNLOCK(fdp);
+	for (i = 0; i <= lastfile; i++) {
 		fde = &fdp->fd_ofiles[i];
 		fp = fde->fde_file;
 		if (fp == NULL || (fp->f_type != DTYPE_MACH_IPC))
@@ -724,9 +727,16 @@ ipc_entry_list_close(void *arg __unused, struct proc *p)
 		if ((entry->ie_bits & MACH_PORT_TYPE_PORT_SET) == 0)
 			continue;
 		kern_last_close(td, fp, fdp, i);
+
+		FILEDESC_SLOCK(fdp);
+		lastfile = fdlastfile(fdp);
+		FILEDESC_SUNLOCK(fdp);
 	}
 
-	for (i = 0; i <= fdlastfile(fdp); i++) {
+	FILEDESC_SLOCK(fdp);
+	lastfile = fdlastfile(fdp);
+	FILEDESC_SUNLOCK(fdp);
+	for (i = 0; i <= lastfile; i++) {
 
 		fde = &fdp->fd_ofiles[i];
 		fp = fde->fde_file;
@@ -743,16 +753,23 @@ ipc_entry_list_close(void *arg __unused, struct proc *p)
 		}
 #endif
 		kern_last_close(td, fp, fdp, i);
+
+		FILEDESC_SLOCK(fdp);
+		lastfile = fdlastfile(fdp);
+		FILEDESC_SUNLOCK(fdp);
 	}
 
 #ifdef INVARIANTS
+	FILEDESC_SLOCK(fdp);
 	for (i = 0; i <= fdlastfile(fdp); i++) {
 		fde = &fdp->fd_ofiles[i];
 		fp = fde->fde_file;
 		if (fp != NULL)
 			MPASS(fp->f_type != DTYPE_MACH_IPC);
 	}
+	FILEDESC_SUNLOCK(fdp);
 #endif
+
 	/* free unreferenced ipc_entrys */
 	i = 0;
 	while(!LIST_EMPTY(&space->is_entry_list)) {
