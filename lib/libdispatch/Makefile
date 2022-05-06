@@ -12,6 +12,7 @@ MK_WERROR= no
 CFLAGS+=	-I${.CURDIR}/../../include/apple -I${.CURDIR}/os -I${.CURDIR}/private
 CFLAGS+=	-I${.CURDIR} -I${MACHINE_INCLUDES} -I${.CURDIR}/../../include -I${.CURDIR}/../../sys 
 CFLAGS+=	-I. -I${.CURDIR}/include -fblocks -fPIC
+CFLAGS+=	-I${SRCTOP}/include
 CFLAGS+=	-D__APPLE__ -DDISPATCH_USE_DTRACE=0
 CFLAGS+=	-DDISPATCH_USE_SIMPLE_ASL=0 -DUSE_OBJC=0 -D__BLOCKS__=1
 CFLAGS+=	-DDISPATCH_DEBUG=1
@@ -76,5 +77,5 @@ beforeinstall: mkincdir
 mkincdir: .PHONY
 	${INSTALL} -d -o ${BINOWN} -g ${BINGRP} -m 0755 ${DESTDIR}${INCSDIR}
 
-.include <airyx.common.mk>
+.include <rvn.common.mk>
 .include <bsd.lib.mk>

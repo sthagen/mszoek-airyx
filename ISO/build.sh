@@ -4,8 +4,8 @@
 set -e
 
 # BSD ABI
-VER="13.0"
-MAJOR="13"
+VER="14.0"
+MAJOR="14"
 
 if [ -x /usr/sbin/pkg ]; then
   PKG=/usr/sbin/pkg
@@ -19,12 +19,12 @@ else
 fi
 
 
-if [ -z "${AIRYX}" ]; then
-  AIRYX=$(pwd)/..
+if [ -z "${RAVYNOS}" ]; then
+  RAVYNOS=$(pwd)/..
 fi
-AIRYX_VERSION=$(head -1 ${AIRYX}/version.txt)
-AIRYX_CODENAME=$(tail -1 ${AIRYX}/version.txt)
-version=${AIRYX_VERSION}
+RAVYNOS_VERSION=$(head -1 ${RAVYNOS}/version.txt)
+RAVYNOS_CODENAME=$(tail -1 ${RAVYNOS}/version.txt)
+version=${RAVYNOS_VERSION}
 
 desktop=$1
 tag=$2
@@ -50,8 +50,8 @@ export uzip="${livecd}/uzip"
 export cdroot="${livecd}/cdroot"
 ramdisk_root="${cdroot}/data/ramdisk"
 vol="furybsd"
-label="AIRYX"
-export DISTRIBUTIONS="kernel.txz base.txz airyx.txz"
+label="RAVYNOS"
+export DISTRIBUTIONS="kernel.txz base.txz ravynos.txz"
 
 # Only run as superuser
 if [ "$(id -u)" != "0" ]; then
@@ -120,7 +120,7 @@ if [ "${desktop}" = "hello" ] ; then
   fi
 fi
 
-if [ "${desktop}" = "airyx" ]; then
+if [ "${desktop}" = "ravynOS" ]; then
     MAJLABEL="f${MAJOR}"
     if [ ! -z "${CIRRUS_BUILD_ID}" ]; then
       MAJLABEL="${MAJLABEL}_${CIRRUS_BUILD_ID}"
@@ -168,22 +168,22 @@ base()
   # TODO: Signature checking
   if [ ! -f "${base}/base.txz" ] ; then 
     cd ${base}
-    fetch -o base.txz https://dl.cloudsmith.io/public/airyx/13_0/raw/names/base_main.txz/files/base.txz
+    fetch -o base.txz https://dl.cloudsmith.io/public/ravynsoft/ravynOS/raw/names/base_main.txz/files/base.txz
   fi
   
   if [ ! -f "${base}/kernel.txz" ] ; then
     cd ${base}
-    fetch -o kernel.txz https://dl.cloudsmith.io/public/airyx/13_0/raw/names/kernel_main.txz/files/kernel.txz
+    fetch -o kernel.txz https://dl.cloudsmith.io/public/ravynsoft/ravynOS/raw/names/kernel_main.txz/files/kernel.txz
   fi
 
-  if [ ! -f "${base}/airyx.txz" ] ; then
+  if [ ! -f "${base}/ravynOS.txz" ] ; then
     cd ${base}
-    fetch https://api.cirrus-ci.com/v1/artifact/github/mszoek/airyx/airyx/airyx/dist/airyx.txz
+    fetch https://api.cirrus-ci.com/v1/artifact/github/mszoek/airyx/ravynOS/ravynOS/dist/ravynOS.txz
   fi
   cd ${base}
   tar -zxvf base.txz -C ${uzip}
   tar -zxvf kernel.txz -C ${uzip}
-  tar -zxvf airyx.txz -C ${uzip}
+  tar -zxvf ravynOS.txz -C ${uzip}
   touch ${uzip}/etc/fstab
 }
 
@@ -223,7 +223,7 @@ packages()
     mkdir -p ${uzip}${pkg_cachedir}/furybsd-https
     for url in $(grep -e '^https' "${cwd}/settings/packages.$p"); do
         # ABI=freebsd:12:$arch in an attempt to use package built on 12 for 13
-        pkg_add_from_url "$url" furybsd-https "freebsd:12:$arch"
+        pkg_add_from_url "$url" furybsd-https "freebsd:14:$arch"
     done
   done
   # Install the packages we have generated in pkg() that are listed in transient-packages-list
@@ -306,8 +306,8 @@ pkg()
   mkdir -p "${packages}/transient"
   cd "${packages}/transient"
   rm -f *.pkg # Make sure there are no leftover transient packages from earlier runs
-  splashqml="${cwd}/overlays/uzip/airyx/files/usr/share/plasma/look-and-feel/Airyx/contents/splash/Splash.qml" 
-  sed -e "s@__CODENAME__@${AIRYX_CODENAME}@" -e "s@__VERSION__@${AIRYX_VERSION}@" < "${splashqml}.in" > "${splashqml}"
+  splashqml="${cwd}/overlays/uzip/ravynos/files/usr/share/plasma/look-and-feel/ravynOS/contents/splash/Splash.qml" 
+  sed -e "s@__CODENAME__@${RAVYNOS_CODENAME}@" -e "s@__VERSION__@${RAVYNOS_VERSION}@" < "${splashqml}.in" > "${splashqml}"
   while read -r p; do
     sh -ex "${cwd}/scripts/build-pkg.sh" -m "${cwd}/overlays/uzip/${p}"/manifest -d "${cwd}/overlays/uzip/${p}/files"
   done <"${cwd}"/settings/overlays.common
@@ -326,10 +326,10 @@ initgfx()
     if [ $MAJOR -lt 14 ] ; then
       PKGS="quarterly"
     else
-      PKGS="release_2"
+      PKGS="latest"
     fi
-	ver=470
-        pkgfile='nvidia-driver-470.86.txz' #$(${PKG} -c ${uzip} rquery %n-%v.txz nvidia-driver${ver:+-$ver})
+	ver=510.60.02
+        pkgfile="nvidia-driver-${ver}.pkg"
         fetch -o "${cache}/" "https://pkg.freebsd.org/FreeBSD:${MAJOR}:amd64/${PKGS}/All/${pkgfile}"
         mkdir -p "${uzip}/usr/local/nvidia/${ver:-440}/"
         tar xfC "${cache}"/${pkgfile} "${uzip}/usr/local/nvidia/${ver:-440}/"
