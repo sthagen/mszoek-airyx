@@ -188,6 +188,7 @@ static void emptyPool(struct arc_tls *tls, void *stop)
 		       (tls->pool->insert > tls->pool->pool))
 		{
 			tls->pool->insert--;
+			fprintf(stderr,"2nd release %p (0x%lx)\n",tls->pool->insert,*tls->pool->insert);
 			release(*tls->pool->insert);
 		}
 	}
@@ -243,7 +244,7 @@ extern "C" OBJC_PUBLIC size_t object_getRetainCount_np(id obj)
 {
 	uintptr_t *refCount = ((uintptr_t*)obj) - 1;
 	uintptr_t refCountVal = __sync_fetch_and_add(refCount, 0);
-	return (((size_t)refCountVal) & refcount_mask) + 1;
+	return (((size_t)refCountVal) & refcount_mask)/* + 1*/;
 }
 
 extern "C" OBJC_PUBLIC id objc_retain_fast_np(id obj)
