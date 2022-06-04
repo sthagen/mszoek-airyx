@@ -49,13 +49,16 @@ extern const NSString *WLMenuDidUpdateNotification;
 
 // system and application menu titles view
 @interface MenuView: NSView {
-    NSImageView *logoView;
+    NSMainMenuView *logoMenuView;
+    NSMenu *sysMenu;
     NSMainMenuView *appMenuView;
+    NSWindow *aboutWindow;
 }
 
 - (MenuView *)init;
 - (void)setWindow:(NSWindow *)window;
 - (void)setMenu:(NSMenu *)menu;
+- (void)aboutThisComputer;
 @end
 
 // menu extras container
@@ -104,7 +107,6 @@ extern const NSString *WLMenuDidUpdateNotification;
 
 // desktop interface controller
 @interface AppDelegate: NSObject {
-    mach_port_t _bootstrapPort;
     mach_port_name_t _servicePort;
     NSMutableDictionary *desktops;
     MenuBarWindow *menuBar;
