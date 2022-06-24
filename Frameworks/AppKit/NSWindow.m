@@ -344,6 +344,7 @@ NSString * const NSWindowDidAnimateNotification=@"NSWindowDidAnimateNotification
    _platformWindow=nil;
    [_threadToContext release];
    [_undoManager release];
+   [NSApp _removeWindow:self];
    [super dealloc];
 }
 
@@ -3176,6 +3177,11 @@ NSString * const NSWindowDidAnimateNotification=@"NSWindowDidAnimateNotification
 
 -(void)requestResize:(NSEvent *)event {
     [[self platformWindow] requestResize:event];
+}
+
+// semi-private cover for platform layer-shell support
+-(void)setKeyboardInteractivity:(uint32_t)keyboardStyle {
+    [_platformWindow setKeyboardInteractivity:keyboardStyle];
 }
 
 @end
