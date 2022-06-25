@@ -51,7 +51,7 @@ typedef union {
 
 @implementation AppDelegate
 - (AppDelegate *)init {
-    menuBar = nil;
+    menuBar = [MenuBarWindow alloc];
 
     kern_return_t kr;
     if((kr = bootstrap_check_in(bootstrap_port, SERVICE_NAME, &_servicePort)) != KERN_SUCCESS) {
@@ -74,12 +74,7 @@ typedef union {
             {
                 mach_port_t port = msg.portMsg.descriptor.name;
                 pid_t pid = msg.portMsg.pid;
-                NSLog(@"receiveMachMessage port=%d pid=%d", port, pid);
-                NSMenu *menu = [menuBar menuForPID:pid];
-                if(menu)
-                    [menuBar setPort:port forMenu:menu];
-                else
-                    NSLog(@"Sequence Error: no menu for PID %d but received a port for it", pid);
+                [menuBar setPort:port forPID:pid];
                 break;
             }
             case MSG_ID_INLINE:
@@ -99,26 +94,13 @@ typedef union {
     }
 }
 
-- (void)screenDidResize:(NSNotification *)note {
-    NSMutableDictionary *dict = (NSMutableDictionary *)[note userInfo];
-    NSNumber *key = [dict objectForKey:@"WLOutputXDGOutput"];
+- (void)createWindows:(NSNotification *)note {
+    NSArray *screens = [NSScreen screens];
+    NSScreen *output = [screens objectAtIndex:0]; //FIXME: select preferred display from prefs
 
-    if(key == nil) {
-        NSLog(@"ERROR: screenDidResize for null output key");
-        return;
-    }
-
-    NSRect frame = NSZeroRect;
-    frame.size = NSSizeFromString([dict objectForKey:@"WLOutputSize"]);
-    frame.origin = NSPointFromString([dict objectForKey:@"WLOutputPosition"]);
-
-    MenuBarWindow *w = [[MenuBarWindow alloc] initWithFrame:frame forOutput:key];
-    if(w) {
-        menuBar = w;
-        [menuBar setDelegate:self];
-        [menuBar makeKeyAndOrderFront:nil];
-    }
-    w = 0;
+    [menuBar initWithFrame:[output visibleFrame] forOutput:output];
+    [menuBar setDelegate:self];
+    [menuBar makeKeyAndOrderFront:nil];
 }
 
 /* Recursively set all menu targets and delegates to our proxy */

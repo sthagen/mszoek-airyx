@@ -112,27 +112,25 @@ void machSvcLoop(void *arg) {
 int main(int argc, const char *argv[]) {
     __NSInitializeProcess(argc, argv);
 
-    NSLog(@"Initializing NSApplication");
+    NSAutoreleasePool *pool = [NSAutoreleasePool new];
     [NSApplication sharedApplication];
 
     AppDelegate *del = [AppDelegate new];
     if(!del)
         exit(EXIT_FAILURE);
 
-    NSLog(@"Adding observers");
     NSNotificationCenter *nctr = [NSNotificationCenter defaultCenter];
-    [nctr addObserver:del selector:@selector(screenDidResize:)
-        name:WLOutputDidResizeNotification object:nil];
+    [nctr addObserver:del selector:@selector(createWindows:)
+        name:NSApplicationDidFinishLaunchingNotification object:nil];
     [nctr addObserver:del selector:@selector(menuDidUpdate:)
         name:WLMenuDidUpdateNotification object:nil];
 
-    NSLog(@"Creating menu thread");
     pthread_t menuThread;
     pthread_create(&menuThread, NULL, menuListener, NULL);
 
-    NSLog(@"Creating Mach service thread");
     pthread_t machSvcThread;
     pthread_create(&machSvcThread, NULL, machSvcLoop, (__bridge void *)del);
+    [pool drain];
 
     [NSApp run];
     return 0;
