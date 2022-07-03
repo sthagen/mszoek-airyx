@@ -35,6 +35,9 @@
 
     [self setMovableByWindowBackground:NO];
 
+    NSNotificationCenter *nctr = [NSNotificationCenter defaultCenter];
+    [nctr addObserver:self selector:@selector(notifyTick:) name:@"ClockTick" object:nil];
+
     clockView = [[ClockView alloc] initWithFrame:frame];
     menuView = [[MenuView alloc] initWithFrame:frame];
     extrasView = [ExtrasView new];
@@ -51,6 +54,12 @@
     [_contentView setAutoresizingMask:0];
     
     return self;
+}
+
+- (void)notifyTick:(id)arg {
+    NSString *value = [clockView currentDateValue];
+    [clockView setStringValue:value];
+    [clockView display];
 }
 
 - (mach_port_t)activePort {
@@ -92,6 +101,7 @@
 - (void)removeMenuForPID:(unsigned int)pid {
     if(pid == activePID) {
         [menuView setMenu:nil];
+        [menuView setNeedsDisplay:YES];
         activePID = 0;
     }
     [menuDict removeObjectForKey:[NSNumber numberWithInt:pid]];
@@ -104,6 +114,7 @@
     NSMenu *menu = [self menuForPID:pid];
     if(menu) {
         [menuView setMenu:menu];
+        [menuView setNeedsDisplay:YES];
         return YES;
     }
     return NO;
@@ -111,6 +122,15 @@
 
 - (void)addRecentItem:(NSURL *)itemURL {
     [menuView addRecentItem:itemURL];
+}
+
+// intercept these - we don't want this app to become activated or deactivated
+-(void)platformWindowActivated:(CGWindow *)window displayIfNeeded:(BOOL)displayIfNeeded {
+    // do nothing
+}
+
+-(void)platformWindowDeactivated:(CGWindow *)window checkForAppDeactivation:(BOOL)checkForAppDeactivation {
+    // do nothing
 }
 
 @end
