@@ -182,4 +182,3 @@ system_task:
     - kernel
   ravynOS_artifacts:
     path: dist/ravynOS.txz
-
