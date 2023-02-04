@@ -61,6 +61,8 @@ distribution:
 	${_+_}cd ${SRCTOP}/usr.sbin/rmt; ${MAKE} etc-rmt
 	${INSTALL_SYMLINK} -T "package=runtime" ../var/run/os-release \
 		${DESTDIR}/etc/os-release
+	${INSTALL_SYMLINK} -T "package=runtime" ../var/db/machine-id \
+		${DESTDIR}/etc/machine-id
 .for f in adduser.conf launchd_user.env motd.template shells zprofile
 	${INSTALL} -m 0444 -o root -g wheel ${.CURDIR}/$f ${DESTDIR}/etc/
 .endfor
