@@ -174,9 +174,11 @@ get_operstate(struct ifnet *ifp, struct if_state *pstate)
 
 	switch (ifp->if_type) {
 	case IFT_ETHER:
+	case IFT_L2VLAN:
 		get_operstate_ether(ifp, pstate);
 		break;
-	case IFT_LOOP:
+	default:
+		/* Map admin state to the operstate */
 		if (ifp->if_flags & IFF_UP) {
 			pstate->ifla_operstate = IF_OPER_UP;
 			pstate->ifla_carrier = 1;
@@ -437,9 +439,8 @@ rtnl_handle_getlink(struct nlmsghdr *hdr, struct nlpcb *nlp, struct nl_pstate *n
 
 	NL_LOG(LOG_DEBUG2, "Start dump");
 
-	struct ifnet **match_array;
-	int offset = 0, base_count = 16; /* start with 128 bytes */
-	match_array = malloc(base_count * sizeof(void *), M_TEMP, M_NOWAIT);
+	struct ifnet **match_array = NULL;
+	int offset = 0, base_count = 0;
 
 	NLP_LOG(LOG_DEBUG3, nlp, "MATCHING: index=%u type=%d name=%s",
 	    attrs.ifi_index, attrs.ifi_type, attrs.ifla_ifname);
@@ -447,24 +448,23 @@ rtnl_handle_getlink(struct nlmsghdr *hdr, struct nlpcb *nlp, struct nl_pstate *n
         CK_STAILQ_FOREACH(ifp, &V_ifnet, if_link) {
 		wa.count++;
 		if (match_iface(&attrs, ifp)) {
-			if (offset < base_count) {
-				if (!if_try_ref(ifp))
-					continue;
+			if (offset >= base_count) {
+				/* Too many matches, need to reallocate */
+				struct ifnet **new_array;
+				/* Start with 128 bytes, do 2x increase on each realloc */
+				base_count = (base_count != 0) ? base_count * 2 : 16;
+				new_array = malloc(base_count * sizeof(void *), M_TEMP, M_NOWAIT);
+				if (new_array == NULL) {
+					error = ENOMEM;
+					break;
+				}
+				memcpy(new_array, match_array, offset * sizeof(void *));
+				free(match_array, M_TEMP);
+				match_array = new_array;
+			}
+
+			if (if_try_ref(ifp))
 				match_array[offset++] = ifp;
-				continue;
-			}
-			/* Too many matches, need to reallocate */
-			struct ifnet **new_array;
-			int sz = base_count * sizeof(void *);
-			base_count *= 2;
-			new_array = malloc(sz * 2, M_TEMP, M_NOWAIT);
-			if (new_array == NULL) {
-				error = ENOMEM;
-				break;
-			}
-			memcpy(new_array, match_array, sz);
-			free(match_array, M_TEMP);
-			match_array = new_array;
                 }
         }
 	NET_EPOCH_EXIT(et);
@@ -779,15 +779,11 @@ get_sa_plen(const struct sockaddr *sa)
         switch (sa->sa_family) {
 #ifdef INET
         case AF_INET:
-                if (sa == NULL)
-                        return (32);
                 paddr = &(((const struct sockaddr_in *)sa)->sin_addr);
                 return bitcount32(paddr->s_addr);;
 #endif
 #ifdef INET6
         case AF_INET6:
-                if (sa == NULL)
-                        return (128);
                 paddr6 = &(((const struct sockaddr_in6 *)sa)->sin6_addr);
                 return inet6_get_plen(paddr6);
 #endif
