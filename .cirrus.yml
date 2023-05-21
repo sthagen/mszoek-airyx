@@ -10,8 +10,11 @@ base_task:
   timeout_in: 120m
   environment:
     PKG_CONFIG_PATH: /usr/libdata/pkgconfig:/usr/local/libdata/pkgconfig
+    IGNORE_OSVERSION: yes
   clone_script: |
-    pkg-static install -yf pkg && pkg update
+    #pkg-static install -yf pkg && pkg update
+    rm -f /etc/pkg/FreeBSD.conf
+    pkg update
     pkg install -yf git-tiny
     if [ -z "$CIRRUS_PR" ]; then
       git clone --recursive --branch=$CIRRUS_BRANCH https://x-access-token:${CIRRUS_REPO_CLONE_TOKEN}@github.com/${CIRRUS_REPO_FULL_NAME}.git $CIRRUS_WORKING_DIR
@@ -61,8 +64,11 @@ base_task:
 kernel_task:
   environment:
     PKG_CONFIG_PATH: /usr/libdata/pkgconfig:/usr/local/libdata/pkgconfig
+    IGNORE_OSVERSION: yes
   clone_script: |
-    pkg-static install -yf pkg && pkg update
+    #pkg-static install -yf pkg && pkg update
+    rm -f /etc/pkg/FreeBSD.conf
+    pkg update
     pkg install -yf git-tiny
     if [ -z "$CIRRUS_PR" ]; then
       git clone --recursive --branch=$CIRRUS_BRANCH https://x-access-token:${CIRRUS_REPO_CLONE_TOKEN}@github.com/${CIRRUS_REPO_FULL_NAME}.git $CIRRUS_WORKING_DIR
@@ -108,6 +114,7 @@ kernel_task:
 system_task:
   environment:
     PKG_CONFIG_PATH: /usr/libdata/pkgconfig:/usr/local/libdata/pkgconfig
+    IGNORE_OSVERSION: yes
   id_rsa_priv_file:
     path: /root/.ssh/id_rsa
     variable_name: MIRROR2_SSH_PRIVKEY
@@ -115,7 +122,9 @@ system_task:
     path: /root/.ssh/id_rsa.pub
     variable_name: MIRROR2_SSH_PUBKEY
   clone_script: |
-    pkg-static install -yf pkg && pkg update
+    #pkg-static install -yf pkg && pkg update
+    rm -f /etc/pkg/FreeBSD.conf
+    pkg update
     pkg install -yf git-tiny
     if [ -z "$CIRRUS_PR" ]; then
       git clone --recursive --branch=$CIRRUS_BRANCH https://x-access-token:${CIRRUS_REPO_CLONE_TOKEN}@github.com/${CIRRUS_REPO_FULL_NAME}.git $CIRRUS_WORKING_DIR
