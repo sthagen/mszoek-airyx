@@ -24,8 +24,56 @@
 #import "desktop.h"
 
 @implementation ExtrasView
+- initWithFrame:(NSRect)frame {
+    self = [super initWithFrame:frame];
+    [self setNeedsDisplay:YES];
+    statusItems = [NSMutableArray new];
+    return self;
+}
+
 - (void)addStatusItem:(NSStatusItem *)item pid:(unsigned int)pid {
-    NSLog(@"addStatusItem %@ for %u", item, pid);
+    NSImageView *icon = [[NSImageView alloc]
+	initWithFrame:NSMakeRect(0, 2, menuBarHeight - 4, menuBarHeight - 4)];
+    [icon setImageScaling:NSImageScaleProportionallyUpOrDown];
+    [icon setImage:[item image]];
+    [[icon image] setScalesWhenResized:YES];
+
+    NSMutableDictionary *props = [NSMutableDictionary
+	dictionaryWithObjects:@[item, [NSNumber numberWithInt:pid], icon]
+		      forKeys:@[@"NSStatusItem", @"ProcessID", @"NSView"]];
+
+    if(kill(pid, 0) != 0 && errno == ESRCH)
+        return; // pid has already exited
+
+    [statusItems addObject:props];
+    [self renderItems];
+}
+
+// render the array from right to left, so element 0 is closest
+// to the clock
+- (void)renderItems {
+    [self setSubviews:nil];
+    float height = menuBarHeight - 4;
+    NSPoint itemPos = NSMakePoint(_frame.size.width - menuBarHeight - 12, 2);
+
+    for(int i = 0; i < [statusItems count]; ++i) {
+	NSMutableDictionary *props = [statusItems objectAtIndex:i];
+	NSView *icon = [props objectForKey:@"NSView"];
+	[icon setFrameOrigin:itemPos];
+	[self addSubview:icon];
+	itemPos.x -= (menuBarHeight + 12);
+    }
+    [self setNeedsDisplay:YES];
+}
+
+- (void)removeStatusItemsForPID:(unsigned int)pid {
+    for(int i = 0; i < [statusItems count]; ++i) {
+	NSMutableDictionary *d = [statusItems objectAtIndex:i];
+	if([[d objectForKey:@"ProcessID"] intValue] == pid) {
+	    [statusItems removeObjectAtIndex:i];
+	}
+    }
+    [self renderItems];
 }
 
 @end

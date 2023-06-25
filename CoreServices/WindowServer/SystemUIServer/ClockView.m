@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 Zoe Knox <zoe@pixin.net>
+ * Copyright (C) 2022-2023 Zoe Knox <zoe@pixin.net>
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -52,12 +52,16 @@ pthread_mutex_t mtx;
         attributes:attributes];
 
     NSSize sz = [dateString size];
+    sz.width += menuBarHPad;
     self = [super initWithText:dateString
-        atPoint:NSMakePoint(frame.size.width - sz.width - menuBarHPad, menuBarVPad)
+        atPoint:NSMakePoint(frame.size.width - sz.width, menuBarVPad)
         withMaxWidth:300];
+
+    sz.width += menuBarHPad;
+    [self setFrameSize:sz];
     [self setFont:font];
 
-	[self setSelectable:NO];
+    [self setSelectable:NO];
 
     pthread_mutex_init(&mtx, NULL);
     [NSThread detachNewThreadSelector:@selector(notifyTick:) toTarget:self withObject:nil];
@@ -76,6 +80,10 @@ pthread_mutex_t mtx;
         pthread_mutex_unlock(&mtx);
         usleep(400000);
     }
+}
+
+- (NSSize)size {
+    return _frame.size;
 }
 
 - (BOOL)refusesFirstResponder {

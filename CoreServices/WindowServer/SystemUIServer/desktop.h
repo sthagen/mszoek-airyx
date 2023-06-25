@@ -54,6 +54,7 @@ extern const NSString *WLMenuDidUpdateNotification;
 - (ClockView *)initWithFrame:(NSRect)frame;
 - (NSString *)currentDateValue;
 - (void)notifyTick:(id)arg;
+- (NSSize)size;
 @end
 
 // system and application menu titles view
@@ -80,10 +81,12 @@ extern const NSString *WLMenuDidUpdateNotification;
 
 // menu extras container
 @interface ExtrasView: NSView {
-    NSMutableDictionary *statusItems;
+    NSMutableArray *statusItems;
 }
 
 - (void)addStatusItem:(NSStatusItem *)item pid:(unsigned int)pid;
+- (void)removeStatusItemsForPID:(unsigned int)pid;
+- (void)renderItems;
 @end
 
 // the global top bar
@@ -110,6 +113,7 @@ extern const NSString *WLMenuDidUpdateNotification;
 - (mach_port_t)activePort;
 - (int)activeProcessID;
 - (void)addStatusItem:(NSStatusItem *)item pid:(unsigned int)pid;
+- (void)removeStatusItemsForPID:(unsigned int)pid;
 @end
 
 // desktop interface controller

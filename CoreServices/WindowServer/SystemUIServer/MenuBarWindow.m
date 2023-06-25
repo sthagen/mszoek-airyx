@@ -41,9 +41,19 @@ extern pthread_mutex_t mtx;
     NSNotificationCenter *nctr = [NSNotificationCenter defaultCenter];
     [nctr addObserver:self selector:@selector(notifyTick:) name:@"ClockTick" object:nil];
 
+    float mainWidth = frame.size.width * 0.65;
+    float extraWidth = frame.size.width - mainWidth;
+
     clockView = [[ClockView alloc] initWithFrame:frame];
-    menuView = [[MenuView alloc] initWithFrame:frame];
-    extrasView = [ExtrasView new];
+    NSSize clockSize = [clockView size];
+
+    menuView = [[MenuView alloc] initWithFrame:
+	NSMakeRect(0, 0, mainWidth, menuBarHeight)];
+
+    extrasView = [[ExtrasView alloc]
+	initWithFrame:NSMakeRect(frame.size.width - extraWidth, 0,
+		extraWidth - clockSize.width, menuBarHeight)];
+
     menuDict = [NSMutableDictionary new];
     portDict = [NSMutableDictionary new];
     _menuPort = MACH_PORT_NULL;
@@ -134,6 +144,10 @@ extern pthread_mutex_t mtx;
 
 - (void)addStatusItem:(NSStatusItem *)item pid:(unsigned int)pid {
     [extrasView addStatusItem:item pid:pid];
+}
+
+- (void)removeStatusItemsForPID:(unsigned int)pid {
+    [extrasView removeStatusItemsForPID:pid];
 }
 
 
