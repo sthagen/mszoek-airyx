@@ -28,8 +28,6 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 #include <sys/cdefs.h>
-__FBSDID("$FreeBSD$");
-
 #include <sys/param.h>
 #include <sys/systm.h>
 #include <sys/bus.h>
@@ -983,14 +981,12 @@ mana_query_vport_cfg(struct mana_port_context *apc, uint32_t vport_index,
 void
 mana_uncfg_vport(struct mana_port_context *apc)
 {
-	MANA_APC_LOCK_LOCK(apc);
 	apc->vport_use_count--;
 	if (apc->vport_use_count < 0) {
 		mana_err(NULL,
 		    "WARNING: vport_use_count less than 0: %u\n",
 		    apc->vport_use_count);
 	}
-	MANA_APC_LOCK_UNLOCK(apc);
 }
 
 int
@@ -1019,13 +1015,10 @@ mana_cfg_vport(struct mana_port_context *apc, uint32_t protection_dom_id,
 	 * QPs on a physical port up to the hardware limits independent of the
 	 * Ethernet usage on the same port.
 	 */
-	MANA_APC_LOCK_LOCK(apc);
 	if (apc->vport_use_count > 0) {
-		MANA_APC_LOCK_UNLOCK(apc);
 		return EBUSY;
 	}
 	apc->vport_use_count++;
-	MANA_APC_LOCK_UNLOCK(apc);
 
 	mana_gd_init_req_hdr(&req.hdr, MANA_CONFIG_VPORT_TX,
 	    sizeof(req), sizeof(resp));
@@ -1531,7 +1524,7 @@ mana_post_pkt_rxq(struct mana_rxq *rxq)
 
 	recv_buf_oob = &rxq->rx_oobs[curr_index];
 
-	err = mana_gd_post_and_ring(rxq->gdma_rq, &recv_buf_oob->wqe_req,
+	err = mana_gd_post_work_request(rxq->gdma_rq, &recv_buf_oob->wqe_req,
 	    &recv_buf_oob->wqe_inf);
 	if (err) {
 		mana_err(NULL, "WARNING: rxq %u post pkt err %d\n",
@@ -1762,6 +1755,13 @@ mana_poll_rx_cq(struct mana_cq *cq)
 		}
 
 		mana_process_rx_cqe(cq->rxq, cq, &comp[i]);
+	}
+
+	if (comp_read > 0) {
+		struct gdma_context *gc =
+		    cq->rxq->gdma_rq->gdma_dev->gdma_context;
+
+		mana_gd_wq_ring_doorbell(gc, cq->rxq->gdma_rq);
 	}
 
 	tcp_lro_flush_all(&cq->rxq->lro);

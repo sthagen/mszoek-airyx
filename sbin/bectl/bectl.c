@@ -26,8 +26,6 @@
  */
 
 #include <sys/cdefs.h>
-__FBSDID("$FreeBSD$");
-
 #include <sys/param.h>
 #include <sys/mount.h>
 #include <errno.h>
@@ -442,7 +440,7 @@ bectl_cmd_mount(int argc, char *argv[])
 
 	switch (err) {
 	case BE_ERR_SUCCESS:
-		printf("Successfully mounted %s at %s\n", bootenv, result_loc);
+		printf("%s\n", result_loc);
 		break;
 	default:
 		fprintf(stderr,

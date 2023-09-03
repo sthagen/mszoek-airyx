@@ -72,8 +72,6 @@
  */
 
 #include <sys/cdefs.h>
-__FBSDID("$FreeBSD$");
-
 /*
  *	Manages physical address maps.
  *
@@ -6194,6 +6192,12 @@ pmap_activate(struct thread *td)
 	cp15_ttbr_set(ttb);
 	PCPU_SET(curpmap, pmap);
 	critical_exit();
+}
+
+void
+pmap_active_cpus(pmap_t pmap, cpuset_t *res)
+{
+	*res = pmap->pm_active;
 }
 
 /*

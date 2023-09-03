@@ -1,5 +1,4 @@
 #	@(#)Makefile.inc	8.6 (Berkeley) 5/4/95
-# $FreeBSD$
 
 # machine-independent gen sources
 .PATH: ${LIBC_SRCTOP}/${LIBC_ARCH}/gen ${LIBC_SRCTOP}/gen ${SRCTOP}/etc
@@ -158,6 +157,7 @@ SRCS+=	__getosreldate.c \
 	time.c \
 	times.c \
 	timespec_get.c \
+	timespec_getres.c \
 	timezone.c \
 	tls.c \
 	ttyname.c \
@@ -321,6 +321,7 @@ MAN+=	alarm.3 \
 	time.3 \
 	times.3 \
 	timespec_get.3 \
+	timespec_getres.3 \
 	timezone.3 \
 	ttyname.3 \
 	tzset.3 \

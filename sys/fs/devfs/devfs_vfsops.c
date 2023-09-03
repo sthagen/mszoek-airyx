@@ -32,8 +32,6 @@
  *
  *	@(#)kernfs_vfsops.c	8.10 (Berkeley) 5/14/95
  * From: FreeBSD: src/sys/miscfs/kernfs/kernfs_vfsops.c 1.36
- *
- * $FreeBSD$
  */
 
 #include <sys/param.h>
@@ -226,7 +224,7 @@ static int
 devfs_statfs(struct mount *mp, struct statfs *sbp)
 {
 
-	sbp->f_flags = 0;
+	sbp->f_flags = mp->mnt_flag & MNT_IGNORE;
 	sbp->f_bsize = DEV_BSIZE;
 	sbp->f_iosize = DEV_BSIZE;
 	sbp->f_blocks = 2;		/* 1K to keep df happy */

@@ -1,4 +1,3 @@
-/* $FreeBSD$ */
 /* Do not modify. This file is auto-generated from arm64cpuid.pl. */
 #include "arm_arch.h"
 
@@ -58,6 +57,13 @@ _armv8_sha512_probe:
 .long	0xcec08000	// sha512su0	v0.2d,v0.2d
 	ret
 .size	_armv8_sha512_probe,.-_armv8_sha512_probe
+
+.globl	_armv8_cpuid_probe
+.type	_armv8_cpuid_probe,%function
+_armv8_cpuid_probe:
+	mrs	x0, midr_el1
+	ret
+.size	_armv8_cpuid_probe,.-_armv8_cpuid_probe
 
 .globl	OPENSSL_cleanse
 .type	OPENSSL_cleanse,%function

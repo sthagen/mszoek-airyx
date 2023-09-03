@@ -88,9 +88,7 @@ print_bits(const char *btype, uint32_t *v, const int v_count,
 	int num = 0;
 
 	for (int i = 0; i < v_count * 32; i++) {
-		bool is_set = v[i / 32] & (1 << (i % 32));
-		if (i == 31)
-			v++;
+		bool is_set = v[i / 32] & (1U << (i % 32));
 		if (is_set) {
 			if (num++ == 0)
 				printf("<");
@@ -104,7 +102,7 @@ print_bits(const char *btype, uint32_t *v, const int v_count,
 	}
 	if (num > 0)
 		printf(">");
-}	
+}
 
 static void
 nl_init_socket(struct snl_state *ss)
@@ -226,6 +224,19 @@ if_nametoindex_nl(struct snl_state *ss, const char *ifname)
 	return (link.ifi_index);
 }
 
+ifType
+convert_iftype(ifType iftype)
+{
+	switch (iftype) {
+	case IFT_IEEE8023ADLAG:
+		return (IFT_ETHER);
+	case IFT_INFINIBANDLAG:
+		return (IFT_INFINIBAND);
+	default:
+		return (iftype);
+	}
+}
+
 static void
 prepare_ifaddrs(struct snl_state *ss, struct ifmap *ifmap)
 {
@@ -284,12 +295,18 @@ match_iface(struct ifconfig_args *args, struct iface *iface)
 		struct sockaddr_dl sdl = {
 			.sdl_len = sizeof(struct sockaddr_dl),
 			.sdl_family = AF_LINK,
-			.sdl_type = link->ifi_type,
+			.sdl_type = convert_iftype(link->ifi_type),
 			.sdl_alen = NLA_DATA_LEN(link->ifla_address),
 		};
 		return (match_ether(&sdl));
-	}
-	
+	} else if (args->afp->af_af == AF_LINK)
+		/*
+		 * The rtnetlink(4) RTM_GETADDR does not list link level
+		 * addresses, so latter cycle won't match anything.  Short
+		 * circuit on RTM_GETLINK has provided us an address.
+		 */
+		return (link->ifla_address != NULL);
+
 	for (struct ifa *ifa = iface->ifa; ifa != NULL; ifa = ifa->next) {
 		if (args->afp->af_af == ifa->addr.ifa_family)
 			return (true);
@@ -423,7 +440,7 @@ static int
 get_local_socket(void)
 {
 	int s = socket(AF_LOCAL, SOCK_DGRAM, 0);
-	
+
 	if (s < 0)
 		err(1, "socket(family %u,SOCK_DGRAM)", AF_LOCAL);
 	return (s);

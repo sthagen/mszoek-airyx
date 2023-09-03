@@ -32,8 +32,6 @@
  * SUCH DAMAGE.
  *
  *	@(#)fdesc_vfsops.c	8.4 (Berkeley) 1/21/94
- *
- * $FreeBSD$
  */
 
 /*
@@ -100,6 +98,8 @@ fdesc_mount(struct mount *mp)
 	fmp->flags = 0;
 	if (vfs_getopt(mp->mnt_optnew, "linrdlnk", NULL, NULL) == 0)
 		fmp->flags |= FMNT_LINRDLNKF;
+	if (vfs_getopt(mp->mnt_optnew, "rdlnk", NULL, NULL) == 0)
+		fmp->flags |= FMNT_RDLNKF;
 	if (vfs_getopt(mp->mnt_optnew, "nodup", NULL, NULL) == 0)
 		fmp->flags |= FMNT_NODUP;
 	error = fdesc_allocvp(Froot, -1, FD_ROOT, mp, &rvp);
@@ -219,7 +219,7 @@ fdesc_statfs(struct mount *mp, struct statfs *sbp)
 		freefd += (lim - fdp->fd_nfiles);
 	FILEDESC_SUNLOCK(fdp);
 
-	sbp->f_flags = 0;
+	sbp->f_flags = mp->mnt_flag & MNT_IGNORE;
 	sbp->f_bsize = DEV_BSIZE;
 	sbp->f_iosize = DEV_BSIZE;
 	sbp->f_blocks = 2;		/* 1K to keep df happy */

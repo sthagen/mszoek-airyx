@@ -1,4 +1,3 @@
-/* $FreeBSD$ */
 /*	$NetBSD: citrus_iconv.c,v 1.10 2011/11/19 18:34:21 tnozaki Exp $	*/
 
 /*-
@@ -141,14 +140,11 @@ open_shared(struct _citrus_iconv_shared * __restrict * __restrict rci,
 
 	/* initialize iconv handle */
 	len_convname = strlen(convname);
-	ci = malloc(sizeof(*ci) + len_convname + 1);
+	ci = calloc(1, sizeof(*ci) + len_convname + 1);
 	if (!ci) {
 		ret = errno;
 		goto err;
 	}
-	ci->ci_module = NULL;
-	ci->ci_ops = NULL;
-	ci->ci_closure = NULL;
 	ci->ci_convname = (void *)&ci[1];
 	memcpy(ci->ci_convname, convname, len_convname + 1);
 

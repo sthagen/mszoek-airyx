@@ -1,4 +1,3 @@
-# $FreeBSD$
 
 .PATH: ${SRCTOP}/sys/contrib/openzfs/module/icp
 .PATH: ${SRCTOP}/sys/contrib/openzfs/module/zcommon
@@ -20,6 +19,7 @@ LIBADD= \
 	md \
 	nvpair \
 	pthread \
+	rt \
 	umem \
 	util \
 	uutil \

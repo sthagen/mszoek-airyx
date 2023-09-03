@@ -122,6 +122,13 @@ The value must be formatted as described in
 Wire guest memory.
 .It Va acpi_tables Ta bool Ta false Ta
 Generate ACPI tables.
+.It Va acpi_tables_in_memory Ta bool Ta true Ta
+.Xr bhyve 8
+always exposes ACPI tables by FwCfg.
+For backward compatibility bhyve copies them into the guest memory as well.
+This can cause problems if the guest uses the in-memory version, since certain
+advanced features, such as TPM emulation, are exposed only via FwCfg.
+Therefore, it is recommended to set this flag to false when running Windows guests.
 .It Va destroy_on_poweroff Ta bool Ta false Ta
 Destroy the VM on guest-initiated power-off.
 .It Va gdb.address Ta string Ta localhost Ta
@@ -139,6 +146,15 @@ Specify the keyboard layout name with the file name in
 This value only works when loaded with UEFI mode for VNC, and
 used a VNC client that don't support QEMU Extended Key Event
 Message (e.g. TightVNC).
+.It Va tpm.path Ta string Ta Ta
+Path to the host TPM device.
+This is typically /dev/tpm0.
+.It Va tpm.type Ta string Ta Ta
+Type of the TPM device passed to the guest.
+Currently, only "passthru" is supported.
+.It Va tpm.version Ta string Ta 2.0 Ta
+Version of the TPM device according to the TCG specification.
+Currently, only version 2.0 is supported.
 .It Va rtc.use_localtime Ta bool Ta true Ta
 The real time clock uses the local time of the host.
 If this is set to false, the real time clock uses UTC.

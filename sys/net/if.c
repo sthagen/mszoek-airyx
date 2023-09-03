@@ -30,7 +30,6 @@
  * SUCH DAMAGE.
  *
  *	@(#)if.c	8.5 (Berkeley) 1/9/95
- * $FreeBSD$
  */
 
 #include "opt_bpf.h"
@@ -4908,18 +4907,6 @@ void *
 if_gethandle(u_char type)
 {
 	return (if_alloc(type));
-}
-
-void
-if_bpfmtap(if_t ifp, struct mbuf *m)
-{
-	BPF_MTAP(ifp, m);
-}
-
-void
-if_etherbpfmtap(if_t ifp, struct mbuf *m)
-{
-	ETHER_BPF_MTAP(ifp, m);
 }
 
 void

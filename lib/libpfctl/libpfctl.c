@@ -27,8 +27,6 @@
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
  * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
- *
- * $FreeBSD$
  */
 
 #include <sys/cdefs.h>
@@ -68,6 +66,8 @@ pfctl_do_ioctl(int dev, uint cmd, size_t size, nvlist_t **nvl)
 	int ret;
 
 	data = nvlist_pack(*nvl, &nvlen);
+	if (nvlen > size)
+		size = nvlen;
 
 retry:
 	nv.data = malloc(size);
@@ -252,10 +252,44 @@ pfctl_get_status(int dev)
 	return (status);
 }
 
+static uint64_t
+_pfctl_status_counter(struct pfctl_status_counters *counters, uint64_t id)
+{
+	struct pfctl_status_counter *c;
+
+	TAILQ_FOREACH(c, counters, entry) {
+		if (c->id == id)
+			return (c->counter);
+	}
+
+	return (0);
+}
+
+uint64_t
+pfctl_status_counter(struct pfctl_status *status, int id)
+{
+	return (_pfctl_status_counter(&status->counters, id));
+}
+
+uint64_t
+pfctl_status_fcounter(struct pfctl_status *status, int id)
+{
+	return (_pfctl_status_counter(&status->fcounters, id));
+}
+
+uint64_t
+pfctl_status_scounter(struct pfctl_status *status, int id)
+{
+	return (_pfctl_status_counter(&status->scounters, id));
+}
+
 void
 pfctl_free_status(struct pfctl_status *status)
 {
 	struct pfctl_status_counter *c, *tmp;
+
+	if (status == NULL)
+		return;
 
 	TAILQ_FOREACH_SAFE(c, &status->counters, entry, tmp) {
 		free(c->name);

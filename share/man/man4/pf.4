@@ -26,9 +26,7 @@
 .\" OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 .\" SUCH DAMAGE.
 .\"
-.\" $FreeBSD$
-.\"
-.Dd May 7, 2021
+.Dd August 28, 2023
 .Dt PF 4
 .Os
 .Sh NAME
@@ -302,8 +300,10 @@ calls.
 Nested anchors, since they are not directly attached to the given
 anchor, will not be included.
 This ioctl returns
-.Er EINVAL
-if the given anchor does not exist.
+.Er ENOENT
+if the parent anchor given at
+.Va path
+does not exist.
 .It Dv DIOCGETRULESET Fa "struct pfioc_ruleset *pr"
 Get a ruleset (i.e., an anchor)
 .Va name
@@ -315,10 +315,14 @@ the maximum number of which can be obtained from a preceding
 .Dv DIOCGETRULESETS
 call.
 This ioctl returns
-.Er EINVAL
-if the given anchor does not exist or
+.Er ENOENT
+if the parent anchor given by
+.Va path
+does not exist or
 .Er EBUSY
-if another process is concurrently updating a ruleset.
+if the index passed in by
+.Va nr
+is greater than the number of anchors.
 .It Dv DIOCADDSTATE Fa "struct pfioc_state *ps"
 Add a state entry.
 .Bd -literal
@@ -334,35 +338,40 @@ and
 fields of the
 .Va state
 nvlist from the state table.
-.It Dv DIOCKILLSTATES Fa "struct pfioc_state_kill *psk"
+.It Dv DIOCKILLSTATESNV Fa "struct pfioc_nv nv"
 Remove matching entries from the state table.
 This ioctl returns the number of killed states in
-.Va psk_killed .
+.Va "killed" .
 .Bd -literal
-struct pfioc_state_kill {
-	struct pf_state_cmp	psk_pfcmp;
-	sa_family_t		psk_af;
-	int			psk_proto;
-	struct pf_rule_addr	psk_src;
-	struct pf_rule_addr	psk_dst;
-	char			psk_ifname[IFNAMSIZ];
-	char			psk_label[PF_RULE_LABEL_SIZE];
-	u_int			psk_killed;
+nvlist pf_state_cmp {
+	number			id;
+	number			creatorid;
+	number			direction;
+};
+
+nvlist pf_kill {
+	nvlist pf_state_cmp	cmp;
+	number			af;
+	number			proto;
+	nvlist pf_rule_addr	src;
+	nvlist pf_rule_addr	dst;
+	string			ifname[IFNAMSIZ];
+	string			label[PF_RULE_LABEL_SIZE];
 };
 .Ed
-.It Dv DIOCCLRSTATES Fa "struct pfioc_state_kill *psk"
+.It Dv DIOCCLRSTATESNV Fa "struct pfioc_nv nv"
 Clear all states.
 It works like
-.Dv DIOCKILLSTATES ,
+.Dv DIOCKILLSTATESNV ,
 but ignores the
-.Va psk_af ,
-.Va psk_proto ,
-.Va psk_src ,
+.Va af ,
+.Va proto ,
+.Va src ,
 and
-.Va psk_dst
+.Va dst
 fields of the
-.Vt pfioc_state_kill
-structure.
+.Vt pf_kill
+nvlist.
 .It Dv DIOCSETSTATUSIF Fa "struct pfioc_if *pi"
 Specify the interface for which statistics are accumulated.
 .Bd -literal
@@ -1094,20 +1103,18 @@ The data is returned in the
 structure described below:
 .Bd -literal
 struct pfi_kif {
-	RB_ENTRY(pfi_kif)		 pfik_tree;
 	char				 pfik_name[IFNAMSIZ];
+	union {
+		RB_ENTRY(pfi_kif)	 pfik_tree;
+		LIST_ENTRY(pfi_kif)	 pfik_list;
+	};
 	u_int64_t			 pfik_packets[2][2][2];
 	u_int64_t			 pfik_bytes[2][2][2];
 	u_int32_t			 pfik_tzero;
-	int				 pfik_flags;
-	struct pf_state_tree_lan_ext	 pfik_lan_ext;
-	struct pf_state_tree_ext_gwy	 pfik_ext_gwy;
-	TAILQ_ENTRY(pfi_kif)		 pfik_w_states;
-	void				*pfik_ah_cookie;
+	u_int				 pfik_flags;
 	struct ifnet			*pfik_ifp;
 	struct ifg_group		*pfik_group;
-	int				 pfik_states;
-	int				 pfik_rules;
+	u_int				 pfik_rulerefs;
 	TAILQ_HEAD(, pfi_dynaddr)	 pfik_dynaddrs;
 };
 .Ed

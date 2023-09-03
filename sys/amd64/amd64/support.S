@@ -31,8 +31,6 @@
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
- *
- * $FreeBSD$
  */
 
 #include "opt_ddb.h"
@@ -1971,3 +1969,24 @@ ENTRY(mds_handler_silvermont)
 	popq	%rax
 	retq
 END(mds_handler_silvermont)
+
+/*
+ * Do the same as Linux and execute IRET explicitly, despite IPI
+ * return does it as well.
+ */
+ENTRY(cpu_sync_core)
+/*
+ * Can utilize SERIALIZE when instruction is moved from
+ * 'future extensions' to SDM.
+ */
+	movq	(%rsp), %rdx
+	movl	%ss, %eax
+	pushq	%rax
+	pushq	%rsp
+	addq	$16, (%rsp)
+	pushfq
+	movl	%cs, %eax
+	pushq	%rax
+	pushq	%rdx
+	iretq
+END(cpu_sync_core)

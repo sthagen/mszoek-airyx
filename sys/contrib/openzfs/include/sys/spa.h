@@ -723,16 +723,10 @@ typedef enum spa_mode {
  * Send TRIM commands in-line during normal pool operation while deleting.
  *	OFF: no
  *	ON: yes
- * NB: IN_FREEBSD_BASE is defined within the FreeBSD sources.
  */
 typedef enum {
 	SPA_AUTOTRIM_OFF = 0,	/* default */
 	SPA_AUTOTRIM_ON,
-#ifdef IN_FREEBSD_BASE
-	SPA_AUTOTRIM_DEFAULT = SPA_AUTOTRIM_ON,
-#else
-	SPA_AUTOTRIM_DEFAULT = SPA_AUTOTRIM_OFF,
-#endif
 } spa_autotrim_t;
 
 /*
@@ -1062,6 +1056,8 @@ extern uint64_t spa_deadman_synctime(spa_t *spa);
 extern uint64_t spa_deadman_ziotime(spa_t *spa);
 extern uint64_t spa_dirty_data(spa_t *spa);
 extern spa_autotrim_t spa_get_autotrim(spa_t *spa);
+extern int spa_get_allocator(spa_t *spa);
+extern void spa_set_allocator(spa_t *spa, const char *allocator);
 
 /* Miscellaneous support routines */
 extern void spa_load_failed(spa_t *spa, const char *fmt, ...)
@@ -1213,6 +1209,7 @@ int param_set_deadman_ziotime(ZFS_MODULE_PARAM_ARGS);
 int param_set_deadman_synctime(ZFS_MODULE_PARAM_ARGS);
 int param_set_slop_shift(ZFS_MODULE_PARAM_ARGS);
 int param_set_deadman_failmode(ZFS_MODULE_PARAM_ARGS);
+int param_set_active_allocator(ZFS_MODULE_PARAM_ARGS);
 
 #ifdef ZFS_DEBUG
 #define	dprintf_bp(bp, fmt, ...) do {				\

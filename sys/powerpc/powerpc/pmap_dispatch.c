@@ -28,8 +28,6 @@
  */
 
 #include <sys/cdefs.h>
-__FBSDID("$FreeBSD$");
-
 /*
  * Dispatch MI pmap calls to the appropriate MMU implementation
  * through a previously registered kernel object.
@@ -254,4 +252,10 @@ pmap_is_valid_memattr(pmap_t pmap __unused, vm_memattr_t mode)
 	default:
 		return (FALSE);
 	}
+}
+
+void
+pmap_active_cpus(pmap_t pmap, cpuset_t *res)
+{
+	*res = pmap->pm_active;
 }
