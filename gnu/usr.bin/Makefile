@@ -4,6 +4,8 @@
 SUBDIR.${MK_DIALOG}+=	dialog
 SUBDIR.${MK_GNU_DIFF}+=	diff3
 SUBDIR.${MK_TESTS}+=	tests
+SUBDIR+=                libtool
+SUBDIR+=                gmake
 
 SUBDIR_PARALLEL=
 
