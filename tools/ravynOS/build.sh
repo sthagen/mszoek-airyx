@@ -29,13 +29,13 @@ base_build() {
 
 kernel_build() {
     cd ${CIRRUS_WORKING_DIR}
-    make -j$(sysctl -n hw.ncpu) MK_LIB32=no KERNCONF=RAVYN COMPILER_TYPE=clang buildkernel
+    make -j$(sysctl -n hw.ncpu) MK_LIB32=no KERNCONF=RAVYN WITHOUT_CLEAN=1 COMPILER_TYPE=clang buildkernel
     if [ $? -ne 0 ]; then exit $?; fi
 }
 
 drm_build() {
     cd ${CIRRUS_WORKING_DIR}
-    make -j$(sysctl -n hw.ncpu) MK_LIB32=no KERNCONF=RAVYN COMPILER_TYPE=clang installkernel
+    make -j$(sysctl -n hw.ncpu) MK_LIB32=no KERNCONF=RAVYN WITHOUT_CLEAN=1 COMPILER_TYPE=clang installkernel
     if [ $? -ne 0 ]; then exit $?; fi
     if [ ! -d drm-kmod ]; then
         git clone https://github.com/ravynsoft/drm-kmod.git
@@ -73,13 +73,13 @@ extras_build() {
     if [ $? -ne 0 ]; then exit $?; fi
 }
 
-basepkg() {
+kernelpkg() {
     cd ${CIRRUS_WORKING_DIR}
     make -C release MK_LIB32=no NOSRC=true NOPORTS=true KERNCONF=RAVYN COMPILER_TYPE=clang kernel.txz
     if [ $? -ne 0 ]; then exit $?; fi
 }
 
-kernelpkg() {
+basepkg() {
     cd ${CIRRUS_WORKING_DIR}
     make -C release MK_LIB32=no NOSRC=true NOPORTS=true KERNCONF=RAVYN COMPILER_TYPE=clang base.txz
     if [ $? -ne 0 ]; then exit $?; fi
