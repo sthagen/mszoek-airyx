@@ -21,6 +21,7 @@ SUBDIR=	alias \
 	chat \
 	chpass \
 	cksum \
+        cmake \
 	cmp \
 	col \
 	colrm \
@@ -183,6 +184,7 @@ SUBDIR=	alias \
 	xz \
 	xzdec \
 	yes \
+        zsh \
 	zstd
 
 # NB: keep these sorted by MK_* knobs
