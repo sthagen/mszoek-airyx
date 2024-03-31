@@ -34,10 +34,12 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <cstddef>
+#ifdef _REWRITE_ME_
 #include <QDBusConnection>
 #include <QDBusInterface>
 #include <QMimeDatabase>
 #include <QMimeType>
+#endif // _REWRITE_ME_
 
 #import <launch.h>
 #import <stdlib.h>
@@ -47,7 +49,7 @@
 #define _XOPEN_SOURCE 500
 #endif
 
-#include <X11/Xlib.h>
+//#include <X11/Xlib.h>
 
 #define _NET_WM_STATE_REMOVE 0
 #define _NET_WM_STATE_ADD 1
@@ -403,6 +405,7 @@ static BOOL _LSAddRecordToDatabase(const LSAppRecord *appRecord, BOOL isUpdate) 
     return true;
 }
 
+#ifdef _X11_
 static void PostXEvent(Display *display, Window window, Atom messageType, long d0, long d1,
     long d2, long d3, long d4)
 {
@@ -423,9 +426,11 @@ static void PostXEvent(Display *display, Window window, Atom messageType, long d
     XGetWindowAttributes(display, window, &attr);
     XSendEvent(display, attr.screen->root, False, SubstructureNotifyMask | SubstructureRedirectMask, &e);
 }
+#endif // _X11_
 
 void LSRevealInFiler(CFArrayRef inItemURLs)
 {
+#ifdef _REWRITE_ME_
     QDBusConnection dbus = QDBusConnection::sessionBus();
     QDBusInterface filerIface(QStringLiteral("org.freedesktop.FileManager1"),
         QStringLiteral("/org/freedesktop/FileManager1"), "", dbus);
@@ -445,6 +450,7 @@ void LSRevealInFiler(CFArrayRef inItemURLs)
     } else {
         fprintf(stderr, "Unable to connect to Filer!\n");
     }
+#endif // _REWRITE_ME_
 }
 
 /* from xpc_type.c */
@@ -799,6 +805,7 @@ OSStatus LSOpenFromURLSpec(const LSLaunchURLSpec *inLaunchSpec, CFURLRef _Nullab
                 uti = (__bridge_transfer NSString *)UTTypeCreatePreferredIdentifierForTag(kUTTagClassFilenameExtension,
                     (__bridge CFStringRef)[item pathExtension], NULL);
 
+#ifdef _REWRITE_ME_
             if(uti == nil) {
                 // We don't have a recognized extension. Try to identify by mime type.
                 QMimeDatabase mimedb;
@@ -814,6 +821,7 @@ OSStatus LSOpenFromURLSpec(const LSLaunchURLSpec *inLaunchSpec, CFURLRef _Nullab
                         break;
                 }
             }
+#endif // _REWRITE_ME_
 
             if(uti == nil) {
                 if(!(inLaunchSpec->launchFlags & kLSALaunchTaskEnvIsValid))

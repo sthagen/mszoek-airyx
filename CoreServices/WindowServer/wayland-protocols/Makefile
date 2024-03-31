@@ -38,13 +38,15 @@ UNSTABLE=       idle-inhibit/idle-inhibit-unstable-v1.xml \
 		xdg-decoration/xdg-decoration-unstable-v1.xml \
 		fullscreen-shell/fullscreen-shell-unstable-v1.xml \
 		text-input/text-input-unstable-v1.xml \
-		text-input/text-input-unstable-v3.xml
+		text-input/text-input-unstable-v3.xml \
+                tablet/tablet-unstable-v2.xml
 
 DATADIR=        ${OBJTOP}/tmp${PREFIX}/share/wayland-protocols
 
-all:
-
-includes:
+all: install
+build: install
+obj:
+includes: 
 
 install:
 .for group in stable staging unstable
