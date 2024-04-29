@@ -1,3 +1,13 @@
+distribute:
+.for i in . gettext-runtime gettext-tools libtextstyle
+	ln -sfv ${OBJTOP}/tmp/legacy/bin/install \
+		${MAKEOBJDIR}/${i}/install
+.endfor
+	PATH=$$PATH:${OBJTOP}/tmp/usr/bin \
+		gmake -C ${.OBJDIR} MAKEFLAGS= \
+		DESTDIR=${OBJTOP}/release/dist/base \
+		install
+
 .include <bsd.prog.mk>
 
 .MAKEFLAGS=
@@ -8,10 +18,12 @@ PATH=		${OBJTOP}/tmp/legacy/bin:/bin:/usr/bin
 .export LD_LIBRARY_PATH
 .export PATH
 
+
 CFLAGS=         -I${DESTDIR}/../gnu/lib/gettext/libtextstyle/lib
 LDFLAGS=	-L${OBJTOP}/tmp/usr/lib
 CONFIGURE_ARGS+=        --enable-relocatable
-GMAKE_ARGS+=    INSTALL="${DESTDIR}/legacy/bin/install" CFLAGS="${CFLAGS}"
+INSTALL=	${OBJTOP}/tmp/legacy/bin/install
+GMAKE_ARGS+=    INSTALL="${INSTALL}" CFLAGS="${CFLAGS}"
 OO_FILES= \
 	fd-ostream.oo.c \
 	fd-ostream.oo.h \
@@ -47,4 +59,3 @@ copy-header:
 build: gnu_build
 clean: gnu_clean
 install: gnu_install
-
