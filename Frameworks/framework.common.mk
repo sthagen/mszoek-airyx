@@ -1,10 +1,18 @@
 # Common settings for building frameworks
-FMWK_CFLAGS := --sysroot=${OBJTOP}/tmp -B${OBJTOP}/tmp/usr/bin \
-	 -O0 -g -D__RAVYNOS__ -DPLATFORM_IS_POSIX -DGCC_RUNTIME_3 \
-	 -DPLATFORM_USES_BSD_SOCKETS -D__MACH__ -I${SRCTOP}/Frameworks \
-	 -fobjc-runtime=gnustep-2.0 -fobjc-nonfragile-abi -fPIC \
-	 -Wno-missing-method-return-type -Wno-macro-redefined \
+SYSROOT=  --sysroot=${OBJTOP}/tmp -B${OBJTOP}/tmp/usr/bin
+OPTIMIZE= -O0 -g
+STD_DEFS= -D__RAVYNOS__ -DPLATFORM_IS_POSIX -DGCC_RUNTIME_3 \
+	  -DPLATFORM_USES_BSD_SOCKETS -D__MACH__ 
+OBJCFLAGS= -fobjc-runtime=gnustep-2.0 -fobjc-nonfragile-abi -fPIC \
+	   -Wno-missing-method-return-type -Wno-macro-redefined
+FMWK_CFLAGS := ${SYSROOT} ${OPTIMIZE} ${STD_DEFS} \
+	 ${OBJCFLAGS} -I${SRCTOP}/Frameworks \
 	 -I${SRCTOP}/sys -I${SRCTOP}/include
+FMWK_CXXFLAGS := -nostdinc -nobuiltininc ${OPTIMIZE} ${STD_DEFS} \
+	 ${OBJCFLAGS} -isysroot${OBJTOP}/tmp \
+	 -cxx-isystem${OBJTOP}/tmp/usr/include/c++/v1 \
+	 -cxx-isystem${OBJTOP}/tmp/usr/include \
+	 -I${SRCTOP}/Frameworks
 FMWK_LDFLAGS+= -L${BUILDROOT}/usr/lib -Wl,--no-as-needed
 
 MK_AUTO_OBJ=    yes
@@ -21,6 +29,12 @@ make-obj-dirs:
 .endfor
 .endif
 
+_fmwk_install_includes: .PHONY
+	for header in ${INCS}; do \
+		cp -fv ${.CURDIR}/$$header \
+		${MAKEOBJDIR}/${FRAMEWORK}.framework/Headers/; \
+	done
+
 std_install_hook:
 	mv ${MAKEOBJDIR}/lib${FRAMEWORK}.so \
 		${MAKEOBJDIR}/${FRAMEWORK}.framework/Versions/Current/
@@ -36,3 +50,4 @@ alt_install_hook:
 _libinstall: .PHONY
 .endif
 
+installincludes: _fmwk_install_includes
