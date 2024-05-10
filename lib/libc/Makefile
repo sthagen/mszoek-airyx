@@ -5,6 +5,7 @@ SHLIBDIR?= /lib
 .include <src.opts.mk>
 
 LIBC_SRCTOP?= ${.CURDIR}
+LIBSYS_SRCTOP?=	${.CURDIR:H}/libsys
 
 # Pick the current architecture directory for libc. In general, this is named
 # MACHINE_CPUARCH, but some ABIs are different enough to require their own libc,
@@ -25,6 +26,7 @@ LIBC_ARCH=${MACHINE_CPUARCH}
 # To include legacy CSRG SCCS ID strings, remove -DNO__SCCSID from CFLAGS.
 # To include RCS ID strings from other BSD projects, remove -DNO__RCSID from CFLAGS.
 CFLAGS+=-DNO__SCCSID -DNO__RCSID
+CFLAGS+=-D__MACH__ -D__RAVYNOS__
 
 LIB=c
 SHLIB_MAJOR= 7
@@ -38,6 +40,7 @@ SHLIB_LDSCRIPT_LINKS=libxnet.so
 WARNS?=	2
 CFLAGS+=-I${LIBC_SRCTOP}/include -I${SRCTOP}/include
 CFLAGS+=-I${LIBC_SRCTOP}/${LIBC_ARCH}
+CFLAGS+=-I${LIBSYS_SRCTOP}/${LIBC_ARCH}
 .if ${MK_NLS} != "no"
 CFLAGS+=-DNLS
 .endif
@@ -60,6 +63,14 @@ CFLAGS+= -ftls-model=initial-exec
 #
 LDFLAGS+= -nodefaultlibs
 LIBADD+=	compiler_rt
+LIBADD+=	sys
+.if defined(COMPAT_libcompat)
+# XXX: work around gcc -m32 + bfd ld path issue for DT_NEEDED symbols.
+# https://sourceware.org/bugzilla/show_bug.cgi?id=31395
+LDFLAGS+=	-Wl,--rpath=/usr/lib${COMPAT_libcompat}
+.endif
+
+LDFLAGS+=-Wl,--auxiliary,libsys.so.7
 
 .if ${MK_SSP} != "no" && \
     (${LIBC_ARCH} == "i386" || ${LIBC_ARCH:Mpowerpc*} != "")
@@ -98,7 +109,6 @@ NOASM=
 .include "${LIBC_SRCTOP}/inet/Makefile.inc"
 .include "${LIBC_SRCTOP}/isc/Makefile.inc"
 .include "${LIBC_SRCTOP}/locale/Makefile.inc"
-#.include "${LIBC_SRCTOP}/mach/Makefile.inc"
 .include "${LIBC_SRCTOP}/md/Makefile.inc"
 .include "${LIBC_SRCTOP}/nameser/Makefile.inc"
 .include "${LIBC_SRCTOP}/net/Makefile.inc"
@@ -122,7 +132,6 @@ NOASM=
 .include "${LIBC_SRCTOP}/softfloat/Makefile.inc"
 .endif
 .if ${LIBC_ARCH} == "i386" || ${LIBC_ARCH} == "amd64"
-.include "${LIBC_SRCTOP}/x86/sys/Makefile.inc"
 .include "${LIBC_SRCTOP}/x86/gen/Makefile.inc"
 .endif
 .if ${MK_NIS} != "no"

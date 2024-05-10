@@ -406,7 +406,7 @@ sctp_process_init_ack(struct mbuf *m, int iphlen, int offset,
 	op_err = sctp_arethere_unrecognized_parameters(m,
 	    (offset + sizeof(struct sctp_init_chunk)),
 	    &abort_flag, (struct sctp_chunkhdr *)cp,
-	    &nat_friendly, &cookie_found);
+	    &nat_friendly, &cookie_found, NULL);
 	if (abort_flag) {
 		/* Send an abort and notify peer */
 		sctp_abort_association(stcb->sctp_ep, stcb, m, iphlen,
@@ -4231,6 +4231,8 @@ sctp_handle_packet_dropped(struct sctp_pktdrop_chunk *cp,
 				SCTP_STAT_INCR(sctps_pdrpmbda);
 			}
 		} else {
+			desc.tsn_ifany = htonl(0);
+			memset(desc.data_bytes, 0, SCTP_NUM_DB_TO_VERIFY);
 			if (pktdrp_flags & SCTP_FROM_MIDDLE_BOX) {
 				SCTP_STAT_INCR(sctps_pdrpmbct);
 			}

@@ -163,7 +163,9 @@ struct ieee80211com {
 	uint32_t		ic_caps;	/* capabilities */
 	uint32_t		ic_htcaps;	/* HT capabilities */
 	uint32_t		ic_htextcaps;	/* HT extended capabilities */
-	uint32_t		ic_cryptocaps;	/* crypto capabilities */
+				/* driver-supported software crypto caps */
+	uint32_t		ic_sw_cryptocaps;
+	uint32_t		ic_cryptocaps;	/* hardware crypto caps */
 						/* set of mode capabilities */
 	uint8_t			ic_modecaps[IEEE80211_MODE_BYTES];
 	uint8_t			ic_promisc;	/* vap's needing promisc mode */
@@ -410,9 +412,16 @@ struct ieee80211vap {
 	uint32_t		iv_com_state;	/* com usage / detached flag */
 	enum ieee80211_opmode	iv_opmode;	/* operation mode */
 	enum ieee80211_state	iv_state;	/* state machine state */
-	enum ieee80211_state	iv_nstate;	/* pending state */
-	int			iv_nstate_arg;	/* pending state arg */
-	struct task		iv_nstate_task;	/* deferred state processing */
+
+	/* Deferred state processing. */
+	enum ieee80211_state	iv_nstate;		/* next pending state (historic) */
+#define	NET80211_IV_NSTATE_NUM	8
+	int			iv_nstate_b;		/* First filled slot. */
+	int			iv_nstate_n;		/* # of filled slots. */
+	enum ieee80211_state	iv_nstates[NET80211_IV_NSTATE_NUM];	/* queued pending state(s) */
+	int			iv_nstate_args[NET80211_IV_NSTATE_NUM];	/* queued pending state(s) arg */
+	struct task		iv_nstate_task[NET80211_IV_NSTATE_NUM];
+
 	struct task		iv_swbmiss_task;/* deferred iv_bmiss call */
 	struct callout		iv_mgtsend;	/* mgmt frame response timer */
 						/* inactivity timer settings */
@@ -604,7 +613,7 @@ struct ieee80211vap {
 	struct ieee80211_rx_histogram	*rx_histogram;
 	struct ieee80211_tx_histogram	*tx_histogram;
 
-	uint64_t		iv_spare[6];
+	uint64_t		iv_spare[36];
 };
 MALLOC_DECLARE(M_80211_VAP);
 
@@ -742,6 +751,10 @@ MALLOC_DECLARE(M_80211_VAP);
 int	ic_printf(struct ieee80211com *, const char *, ...) __printflike(2, 3);
 void	ieee80211_ifattach(struct ieee80211com *);
 void	ieee80211_ifdetach(struct ieee80211com *);
+void	ieee80211_set_software_ciphers(struct ieee80211com *,
+	    uint32_t cipher_suite);
+void	ieee80211_set_hardware_ciphers(struct ieee80211com *,
+	    uint32_t cipher_suite);
 int	ieee80211_vap_setup(struct ieee80211com *, struct ieee80211vap *,
 		const char name[IFNAMSIZ], int unit,
 		enum ieee80211_opmode opmode, int flags,
