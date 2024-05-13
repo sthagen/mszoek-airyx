@@ -56,8 +56,10 @@ drm_build() {
 
 system_build() {
     cd ${CIRRUS_WORKING_DIR}
-    if [ "${CIRRUS_CI}" ]; then
-        ln -sf ${CIRRUS_WORKING_DIR}/sys/$(uname -p)/include \
+    echo "CIRRUS_CI=${CIRRUS_CI}"
+    if [ "x${CIRRUS_CI}" = "xtrue" ]; then
+	echo "Symlinking OBJTOP/usr/include/machine for CI"
+        ln -sf ${CIRRUS_WORKING_DIR}/sys/$(uname -m)/include \
 	/usr/obj/${CIRRUS_WORKING_DIR}/${PLATFORM}/tmp/usr/include/machine
     fi
     #ln -sf ../sys /usr/obj/${CIRRUS_WORKING_DIR}/${PLATFORM}/tmp/sys
