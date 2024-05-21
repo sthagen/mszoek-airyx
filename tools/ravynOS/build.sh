@@ -46,8 +46,9 @@ kernel_build() {
 
 drm_build() {
     cd ${CIRRUS_WORKING_DIR}
-    make -j${CORES} MK_LIB32=no KERNCONF=RAVYN WITHOUT_CLEAN=1 COMPILER_TYPE=clang installkernel
-    if [ $? -ne 0 ]; then exit $?; fi
+    # Is this install actually needed?
+    #make -j${CORES} MK_LIB32=no KERNCONF=RAVYN WITHOUT_CLEAN=1 COMPILER_TYPE=clang installkernel
+    #if [ $? -ne 0 ]; then exit $?; fi
     if [ ! -d drm-kmod ]; then
         git clone https://github.com/ravynsoft/drm-kmod.git
     fi
@@ -98,8 +99,18 @@ extras_build() {
     cd ${CIRRUS_WORKING_DIR}
 }
 
+cleanpkg() {
+    rm -f dist/ravynOS.txz
+    for pkg in kernel kernel-dbg base base-dbg tests
+    do \
+	rm -f ${BUILDROOT}/release/${pkg}.txz
+    done
+}
+
 kernelpkg() {
     cd ${CIRRUS_WORKING_DIR}
+    rm -f ${BUILDROOT}/release/kernel.txz
+    rm -f ${BUILDROOT}/release/kernel-dbg.txz
     make -C release MK_LIB32=no NOSRC=true NOPORTS=true KERNCONF=RAVYN COMPILER_TYPE=clang kernel.txz
     if [ $? -ne 0 ]; then exit $?; fi
 }
@@ -137,12 +148,14 @@ while ! [ "z$1" = "z" ]; do
         kernel) kernel_build ;;
         system) system_build ;;
         extras) extras_build ;;
+	drm) drm_build ;;
         iso) iso_build ;;
         basepkg) basepkg ;;
         kernelpkg) kernelpkg ;;
         systempkg) systempkg ;;
         isoalt) isoalt ;;
-        all) kernel_build; base_build; system_build; extras_build; iso_build ;;
+	cleanpkg) cleanpkg ;;
+        all) kernel_build; drm_build; base_build; system_build; extras_build; iso_build ;;
     esac
     shift
 done
