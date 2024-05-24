@@ -51,6 +51,20 @@ ${FRAMEWORK_DIR}:
 	(cd "${FRAMEWORK_DIR}/Versions"; ln -sf ${FMWK_VERSION} Current)
 	touch "${FRAMEWORK_DIR}/Versions/${FMWK_VERSION}/Resources/Info.plist"
 
+link_subdirs:
+_fcmd=(
+.for d in ${LINK_SUBDIR}
+LINK_EXT.${d}?=.o
+_fcmd+=find ${d} -name '*${LINK_EXT.${d}:M*}' -a -not -name '.depend.*'
+.for _excl in ${LINK_EXCLUDE.${d}:M*}
+_fcmd+= -a -not -name '${_excl}'
+.endfor
+_fcmd+=;
+.endfor
+_fcmd+=)
+LDADD+= ${_fcmd:sh:M*}
 
 .include <bsd.lib.mk>
 .include <bsd.incs.mk>
+
+${SHLIB_NAME_FULL}: link_subdirs
