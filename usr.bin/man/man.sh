@@ -201,6 +201,10 @@ decho() {
 # Returns true if glob resolves to a real file and store the first
 # found filename in the variable $found
 exists() {
+	if [ -z "$1" ]; then
+		return 1
+	fi
+
 	local IFS
 
 	# Don't accidentally inherit callers IFS (breaks perl manpages)
@@ -318,9 +322,10 @@ man_check_for_so() {
 	# We need to loop to accommodate multiple .so directives.
 	while true
 	do
-		line=$($cattool "$manpage" 2>/dev/null | head -n1)
+		line=$($cattool "$manpage" 2>/dev/null | grep -E -m1 -v '^\.\\"[ ]*|^[ ]*$')
 		case "$line" in
-		.so*)	trim "${line#.so}"
+               '.so /'*) break ;; # ignore absolute path
+               '.so '*) trim "${line#.so}"
 			decho "$manpage includes $tstr"
 			# Glob and check for the file.
 			if ! check_man "$1/$tstr" ""; then

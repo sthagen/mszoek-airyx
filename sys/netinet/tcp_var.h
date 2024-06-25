@@ -542,13 +542,10 @@ typedef enum {
 #define	TCP_FUNC_OUTPUT_CANDROP	0x02   	/* tfb_tcp_output may ask tcp_drop */
 
 /**
- * Adding a tfb_tcp_handoff_ok function allows the socket
- * option to change stacks to query you even if the
- * connection is in a later stage. You return 0 to
- * say you can take over and run your stack, you return
- * non-zero (an error number) to say no you can't.
- * If the function is undefined you can only change
- * in the early states (before connect or listen).
+ * tfb_tcp_handoff_ok is a mandatory function allowing
+ * to query a stack, if it can take over a tcpcb.
+ * You return 0 to say you can take over and run your stack,
+ * you return non-zero (an error number) to say no you can't.
  *
  * tfb_tcp_fb_init is used to allow the new stack to
  * setup its control block. Among the things it must
@@ -1421,19 +1418,6 @@ extern counter_u64_t tcp_comp_total;
 extern counter_u64_t tcp_uncomp_total;
 extern counter_u64_t tcp_bad_csums;
 
-#ifdef TCP_SAD_DETECTION
-/* Various SACK attack thresholds */
-extern int32_t tcp_force_detection;
-extern int32_t tcp_sad_limit;
-extern int32_t tcp_sack_to_ack_thresh;
-extern int32_t tcp_sack_to_move_thresh;
-extern int32_t tcp_restoral_thresh;
-extern int32_t tcp_sad_decay_val;
-extern int32_t tcp_sad_pacing_interval;
-extern int32_t tcp_sad_low_pps;
-extern int32_t tcp_map_minimum;
-extern int32_t tcp_attack_on_turns_on_logging;
-#endif
 extern uint32_t tcp_ack_war_time_window;
 extern uint32_t tcp_ack_war_cnt;
 
