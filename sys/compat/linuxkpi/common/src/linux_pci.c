@@ -755,7 +755,8 @@ _lkpi_pci_iomap(struct pci_dev *pdev, int bar, int mmio_size __unused)
 }
 
 void *
-linuxkpi_pci_iomap(struct pci_dev *pdev, int mmio_bar, int mmio_size)
+linuxkpi_pci_iomap_range(struct pci_dev *pdev, int mmio_bar,
+    unsigned long mmio_off, unsigned long mmio_size)
 {
 	struct resource *res;
 
@@ -765,17 +766,32 @@ linuxkpi_pci_iomap(struct pci_dev *pdev, int mmio_bar, int mmio_size)
 	/* This is a FreeBSD extension so we can use bus_*(). */
 	if (pdev->want_iomap_res)
 		return (res);
-	return ((void *)rman_get_bushandle(res));
+	MPASS(mmio_off < rman_get_size(res));
+	return ((void *)(rman_get_bushandle(res) + mmio_off));
+}
+
+void *
+linuxkpi_pci_iomap(struct pci_dev *pdev, int mmio_bar, int mmio_size)
+{
+	return (linuxkpi_pci_iomap_range(pdev, mmio_bar, 0, mmio_size));
 }
 
 void
 linuxkpi_pci_iounmap(struct pci_dev *pdev, void *res)
 {
 	struct pci_mmio_region *mmio, *p;
+	bus_space_handle_t bh = (bus_space_handle_t)res;
 
 	TAILQ_FOREACH_SAFE(mmio, &pdev->mmio, next, p) {
-		if (res != (void *)rman_get_bushandle(mmio->res))
-			continue;
+		if (pdev->want_iomap_res) {
+			if (res != mmio->res)
+				continue;
+		} else {
+			if (bh <  rman_get_bushandle(mmio->res) ||
+			    bh >= rman_get_bushandle(mmio->res) +
+				  rman_get_size(mmio->res))
+				continue;
+		}
 		bus_release_resource(pdev->dev.bsddev,
 		    mmio->type, mmio->rid, mmio->res);
 		TAILQ_REMOVE(&pdev->mmio, mmio, next);
@@ -976,10 +992,10 @@ linux_pci_register_driver(struct pci_driver *pdrv)
 {
 	devclass_t dc;
 
-	dc = devclass_find("pci");
+	pdrv->isdrm = strcmp(pdrv->name, "drmn") == 0;
+	dc = pdrv->isdrm ? devclass_create("vgapci") : devclass_find("pci");
 	if (dc == NULL)
 		return (-ENXIO);
-	pdrv->isdrm = false;
 	return (_linux_pci_register_driver(pdrv, dc));
 }
 
@@ -1148,44 +1164,6 @@ linuxkpi_pci_release_regions(struct pci_dev *pdev)
 		pci_release_region(pdev, i);
 }
 
-/**
- * pci_iomap_range - create a virtual mapping cookie for a PCI BAR
- * @dev: PCI device that owns the BAR
- * @bar: BAR number
- * @offset: map memory at the given offset in BAR
- * @maxlen: max length of the memory to map
- *
- * Using this function you will get a __iomem address to your device BAR.
- * You can access it using ioread*() and iowrite*(). These functions hide
- * the details if this is a MMIO or PIO address space and will just do what
- * you expect from them in the correct way.
- *
- * @maxlen specifies the maximum length to map. If you want to get access to
- * the complete BAR from offset to the end, pass %0 here.
- * */
-void __iomem *pci_iomap_range(struct pci_dev *dev,
-			      int bar,
-			      unsigned long offset,
-			      unsigned long maxlen)
-{
-	resource_size_t start = pci_resource_start(dev, bar);
-	resource_size_t len = pci_resource_len(dev, bar);
-	unsigned long flags = pci_resource_flags(dev, bar);
-
-	if (len <= offset || !start)
-		return NULL;
-	len -= offset;
-	start += offset;
-	if (maxlen && len > maxlen)
-		len = maxlen;
-//	if (flags & IORESOURCE_IO)
-//		return __pci_ioport_map(dev, start, len);
-	if (flags & IORESOURCE_MEM)
-		return ioremap(start, len);
-	/* What? */
-	return NULL;
-}
-
 int
 linux_pci_register_drm_driver(struct pci_driver *pdrv)
 {
@@ -1204,7 +1182,7 @@ linux_pci_unregister_driver(struct pci_driver *pdrv)
 {
 	devclass_t bus;
 
-	bus = devclass_find("pci");
+	bus = devclass_find(pdrv->isdrm ? "vgapci" : "pci");
 
 	spin_lock(&pci_lock);
 	list_del(&pdrv->node);
