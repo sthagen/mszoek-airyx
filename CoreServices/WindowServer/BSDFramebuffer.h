@@ -41,9 +41,11 @@
 #include <sys/consio.h>
 #include <sys/fbio.h>
 
+#import "WSDisplay.h"
+
 #define DEFAULT_DPI = 100
 
-@interface BSDFramebuffer: NSObject {
+@interface BSDFramebuffer : WSDisplay {
     int fbfd;
     int stride;
     uint8_t *data;

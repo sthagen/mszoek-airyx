@@ -22,8 +22,10 @@
 
 #import <mach/mach.h>
 #import <CoreGraphics/CGDirectDisplay.h>
+#import <CoreGraphics/CGError.h>
 #import <CoreFoundation/CFMachPort.h>
 #import <WindowServer/message.h>
+#import <WindowServer/rpc.h>
 
 const CFStringRef kCGDisplayStreamSourceRect = CFSTR("kCGDisplayStreamSourceRect");
 const CFStringRef kCGDisplayStreamDestinationRect = CFSTR("kCGDisplayStreamDestinationRect");
@@ -43,40 +45,248 @@ kern_return_t _windowServerRPC(void *data, size_t len, void *replyBuf, int *repl
 
 // Finding displays
 CGDirectDisplayID CGMainDisplayID(void) {
+    struct wsRPCBase data = { kCGMainDisplayID, 0 };
+    struct wsRPCSimple ID;
+    int len = sizeof(ID);
+    kern_return_t ret = _windowServerRPC(&data, sizeof(data), &ID, &len);
+    if(ret == KERN_SUCCESS)
+        return ID.val1;
+    return kCGNullDirectDisplay;
+}
 
+CGError CGGetDisplayList(uint32_t code, uint32_t maxDisplays, CGDirectDisplayID *displays, uint32_t *displayCount) {
+    struct wsRPCBase data = { code, 0 };
+    int replyLen = sizeof(data) + sizeof(CGDirectDisplayID)*maxDisplays;
+    uint8_t *replyBuf = (uint8_t *)malloc(replyLen);
+
+    if(replyBuf == NULL)
+        return kCGErrorFailure;
+
+    _windowServerRPC(&data, sizeof(data), replyBuf, &replyLen);
+    if(replyLen < 0) {
+        free(replyBuf);
+        return kCGErrorFailure;
+    }
+
+    memcpy(&data, replyBuf, sizeof(data));
+    uint32_t *list = (uint32_t *)(replyBuf + sizeof(data));
+
+    int count = data.len / sizeof(CGDirectDisplayID);
+    if(maxDisplays < count)
+        count = maxDisplays;
+
+    if(displays != NULL) {
+        for(int i = 0; i < count; i++) 
+            displays[i] = list[i];
+    }
+    *displayCount = count;
+
+    free(replyBuf);
+    return kCGErrorSuccess;
 }
 
 CGError CGGetOnlineDisplayList(uint32_t maxDisplays, CGDirectDisplayID *onlineDisplays, uint32_t *displayCount) {
-
+    return CGGetDisplayList(kCGGetOnlineDisplayList, maxDisplays, onlineDisplays, displayCount);
 }
 
 CGError CGGetActiveDisplayList(uint32_t maxDisplays, CGDirectDisplayID *activeDisplays, uint32_t *displayCount) {
-
+    return CGGetDisplayList(kCGGetActiveDisplayList, maxDisplays, activeDisplays, displayCount);
 }
 
 CGError CGGetDisplaysWithOpenGLDisplayMask(CGOpenGLDisplayMask mask, uint32_t maxDisplays, CGDirectDisplayID *displays, uint32_t *matchingDisplayCount) {
+    struct wsRPCSimple data = { kCGGetDisplaysWithOpenGLDisplayMask, sizeof(CGOpenGLDisplayMask), mask };
+    int replyLen = sizeof(struct wsRPCBase) + sizeof(CGDirectDisplayID)*maxDisplays;
+    uint8_t *replyBuf = (uint8_t *)malloc(replyLen);
 
+    if(replyBuf == NULL)
+        return kCGErrorFailure;
+
+    _windowServerRPC(&data, sizeof(data), replyBuf, &replyLen);
+    if(replyLen < 0) {
+        free(replyBuf);
+        return kCGErrorFailure;
+    }
+
+    struct wsRPCBase *base = (struct wsRPCBase *)replyBuf;
+    uint32_t *list = (uint32_t *)(replyBuf + sizeof(struct wsRPCBase));
+
+    int count = base->len / sizeof(CGDirectDisplayID);
+    if(maxDisplays < count)
+        count = maxDisplays;
+
+    if(displays != NULL) {
+        for(int i = 0; i < count; i++) 
+            displays[i] = list[i];
+    }
+    *matchingDisplayCount = count;
+
+    free(replyBuf);
+    return kCGErrorSuccess;
 }
 
 CGError CGGetDisplaysWithPoint(CGPoint point, uint32_t maxDisplays, CGDirectDisplayID *displays, uint32_t *matchingDisplayCount) {
+    struct wsRPCSimple data = { kCGGetDisplaysWithPoint, 8 };
+    data.val1 = (uint32_t)point.x;
+    data.val2 = (uint32_t)point.y;
 
+    int replyLen = sizeof(struct wsRPCBase) + sizeof(CGDirectDisplayID)*maxDisplays;
+    uint8_t *replyBuf = (uint8_t *)malloc(replyLen);
+
+    if(replyBuf == NULL)
+        return kCGErrorFailure;
+
+    _windowServerRPC(&data, sizeof(data), replyBuf, &replyLen);
+    if(replyLen < 0) {
+        free(replyBuf);
+        return kCGErrorFailure;
+    }
+
+    struct wsRPCBase *base = (struct wsRPCBase *)replyBuf;
+    uint32_t *list = (uint32_t *)(replyBuf + sizeof(struct wsRPCBase));
+
+    int count = base->len / sizeof(CGDirectDisplayID);
+    if(maxDisplays == 0)
+        displays = NULL;
+    else if(maxDisplays < count && displays != NULL)
+        count = maxDisplays;
+
+    if(displays != NULL) {
+        for(int i = 0; i < count; i++) 
+            displays[i] = list[i];
+    }
+    *matchingDisplayCount = count;
+
+    free(replyBuf);
+    return kCGErrorSuccess;
 }
 
 CGError CGGetDisplaysWithRect(CGRect rect, uint32_t maxDisplays, CGDirectDisplayID *displays, uint32_t *matchingDisplayCount) {
+    struct wsRPCSimple data = { kCGGetDisplaysWithPoint, 16 };
+    data.val1 = (uint32_t)rect.origin.x;
+    data.val2 = (uint32_t)rect.origin.y;
+    data.val3 = (uint32_t)rect.size.width;
+    data.val4 = (uint32_t)rect.size.height;
 
+    int replyLen = sizeof(struct wsRPCBase) + sizeof(CGDirectDisplayID)*maxDisplays;
+    uint8_t *replyBuf = (uint8_t *)malloc(replyLen);
+
+    if(replyBuf == NULL)
+        return kCGErrorFailure;
+
+    _windowServerRPC(&data, sizeof(data), replyBuf, &replyLen);
+    if(replyLen < 0) {
+        free(replyBuf);
+        return kCGErrorFailure;
+    }
+
+    struct wsRPCBase *base = (struct wsRPCBase *)replyBuf;
+    uint32_t *list = (uint32_t *)(replyBuf + sizeof(struct wsRPCBase));
+
+    int count = base->len / sizeof(CGDirectDisplayID);
+    if(maxDisplays == 0)
+        displays = NULL;
+    else if(maxDisplays < count && displays != NULL)
+        count = maxDisplays;
+
+    if(displays != NULL) {
+        for(int i = 0; i < count; i++) 
+            displays[i] = list[i];
+    }
+    *matchingDisplayCount = count;
+
+    free(replyBuf);
+    return kCGErrorSuccess;
 }
 
 CGDirectDisplayID CGOpenGLDisplayMaskToDisplayID(CGOpenGLDisplayMask mask) {
+    uint32_t display;
+    int32_t len = sizeof(display);
 
+    struct wsRPCSimple data = { kCGOpenGLDisplayMaskToDisplayID, 4 };
+    data.val1 = mask;
+
+    _windowServerRPC(&data, sizeof(data), &display, &len);
+    if(len < 0)
+        return kCGNullDirectDisplay;
+    return display;
 }
 
 CGOpenGLDisplayMask CGDisplayIDToOpenGLDisplayMask(CGDirectDisplayID display) {
+    uint32_t mask;
+    int32_t len = sizeof(mask);
 
+    struct wsRPCSimple data = { kCGDisplayIDToOpenGLDisplayMask, 4 };
+    data.val1 = display;
+
+    _windowServerRPC(&data, sizeof(data), &mask, &len);
+    if(len < 0)
+        return 0;
+    return mask;
 }
 
+// Capturing and Releasing Displays
+CGError CGDisplayCapture(CGDirectDisplayID display) {
+    return CGDisplayCaptureWithOptions(display, kCGCaptureNoOptions);
+}
+
+CGError CGDisplayCaptureWithOptions(CGDirectDisplayID display, CGCaptureOptions options) {
+    struct wsRPCSimple data = { kCGDisplayCaptureWithOptions, 8 };
+    data.val1 = display;
+    data.val2 = options;
+    int len = sizeof(data);
+    kern_return_t ret = _windowServerRPC(&data, sizeof(data), &data, &len);
+    if(ret == KERN_SUCCESS)
+        return data.val1;
+    return kCGErrorFailure;
+}
+
+CGError CGDisplayRelease(CGDirectDisplayID display) {
+    struct wsRPCSimple data = { kCGDisplayRelease, 4 };
+    data.val1 = display;
+    int len = sizeof(data);
+    kern_return_t ret = _windowServerRPC(&data, sizeof(data), &data, &len);
+    if(ret == KERN_SUCCESS)
+        return data.val1;
+    return kCGErrorFailure;
+}
+
+CGError CGCaptureAllDisplays(void) {
+    return CGCaptureAllDisplaysWithOptions(kCGCaptureNoOptions);
+}
+
+CGError CGCaptureAllDisplaysWithOptions(CGCaptureOptions options) {
+    struct wsRPCSimple data = { kCGCaptureAllDisplaysWithOptions, 0 };
+    data.val1 = options;
+    int len = sizeof(data);
+    kern_return_t ret = _windowServerRPC(&data, sizeof(data), &data, &len);
+    if(ret == KERN_SUCCESS)
+        return data.val1;
+    return kCGErrorFailure;
+}
 
 CGError CGReleaseAllDisplays(void) {
-   return 0;
+    struct wsRPCSimple data = { kCGReleaseAllDisplays, 0 };
+    int len = sizeof(data);
+    kern_return_t ret = _windowServerRPC(&data, sizeof(data), &data, &len);
+    if(ret == KERN_SUCCESS)
+        return data.val1;
+    return kCGErrorFailure;
+}
+
+CGWindowID CGShieldingWindowID(CGDirectDisplayID display) {
+    // Not implemented
+    return 0;
+}
+
+CGWindowLevel CGShieldingWindowLevel(void) {
+    // Not implemented
+    return 0;
+}
+
+CGContextRef CGDisplayGetDrawingContext(CGDirectDisplayID display) {
+    // Need to think on how to implement this one...
+    // It is supposed to be shared memory owned by the system
+    return NULL;
 }
 
 // WindowServer info
@@ -173,9 +383,10 @@ kern_return_t _windowServerRPC(void *data, size_t len, void *replyBuf, int *repl
     ret = mach_msg((mach_msg_header_t *)&msg, MACH_SEND_MSG|MACH_SEND_TIMEOUT|flags, sizeof(msg),
             sizeof(msg), replyPort, 2000, MACH_PORT_NULL);
     if(ret == KERN_SUCCESS && replyBuf != NULL) {
-        if(*replyLen <= msg.len) {
-            memmove(replyBuf, msg.data, msg.len);
-            *replyLen = msg.len;
+        Message *rmsg = (Message *)&msg;
+        if(*replyLen >= rmsg->len) {
+            *replyLen = rmsg->len;
+            memmove(replyBuf, rmsg->data, *replyLen);
         } else {
             *replyLen = -1;
         }

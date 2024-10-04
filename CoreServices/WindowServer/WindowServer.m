@@ -30,7 +30,6 @@
 #import <AppKit/NSWindow.h>
 #import "common.h"
 #import "WindowServer.h"
-#import "WSInput.h"
 
 #undef direction // defined in mach.h
 #include <linux/input.h>
@@ -40,6 +39,8 @@
 #include <sys/param.h>
 #include <sys/sysctl.h>
 #include <sys/user.h>
+
+#import "rpc.h"
 
 @implementation WindowServer
 
@@ -65,6 +66,7 @@
 
     kvm = kvm_open(NULL, "/dev/null", NULL, O_RDONLY, "WindowServer(kvm): ");
 
+    displays = [NSMutableArray new];
     apps = [NSMutableDictionary new];
 
     input = [WSInput new];
@@ -94,6 +96,7 @@
     if([fb openFramebuffer:"/dev/console"] < 0)
         return nil;
     _geometry = [fb geometry];
+    [displays addObject:fb];
 
     [fb clear];
 
@@ -460,6 +463,165 @@
 
 }
 
+- (void)rpcMainDisplayID:(PortMessage *)msg {
+    uint32_t ID = [(WSDisplay *)fb getDisplayID];
+    struct wsRPCSimple reply = { kCGMainDisplayID, sizeof(uint32_t)*4, ID, 0, 0, 0 };
+    [self sendInlineData:&reply length:sizeof(reply) withCode:MSG_ID_RPC toPort:msg->descriptor.name];
+}
+
+- (void)rpcGetOnlineDisplayList:(PortMessage *)msg {
+    size_t size = sizeof(struct wsRPCBase) + sizeof(uint32_t)*[displays count];
+    uint8_t *list = malloc(size);
+    struct wsRPCBase *p = (struct wsRPCBase *)list;
+    p->code = kCGGetOnlineDisplayList;
+    p->len = 0;
+    uint32_t *q = (uint32_t *)(list + sizeof(struct wsRPCBase));
+    int j = 0;
+    for(int i = 0; i < [displays count]; ++i) {
+        WSDisplay *d = [displays objectAtIndex:i];
+        if([d isOnline])
+            q[j++] = [d getDisplayID];
+    }
+    p->len = j * sizeof(uint32_t);
+    [self sendInlineData:list length:size withCode:MSG_ID_RPC toPort:msg->descriptor.name];
+    free(list);
+}
+
+- (void)rpcGetActiveDisplayList:(PortMessage *)msg {
+    size_t size = sizeof(struct wsRPCBase) + sizeof(uint32_t)*[displays count];
+    uint8_t *list = malloc(size);
+    struct wsRPCBase *p = (struct wsRPCBase *)list;
+    p->code = kCGGetActiveDisplayList;
+    p->len = 0;
+    uint32_t *q = (uint32_t *)(list + sizeof(struct wsRPCBase));
+    int j = 0;
+    for(int i = 0; i < [displays count]; ++i) {
+        WSDisplay *d = [displays objectAtIndex:i];
+        if([d isActive])
+            q[j++] = [d getDisplayID];
+    }
+    p->len = j * sizeof(uint32_t);
+    [self sendInlineData:list length:size withCode:MSG_ID_RPC toPort:msg->descriptor.name];
+    free(list);
+}
+
+- (void)rpcGetDisplaysWithOpenGLDisplayMask:(PortMessage *)msg {
+    struct wsRPCSimple *args = (struct wsRPCSimple *)msg->data;
+    CGOpenGLDisplayMask mask = args->val1;
+
+    size_t size = sizeof(struct wsRPCBase) + sizeof(uint32_t)*[displays count];
+    uint8_t *list = malloc(size);
+    struct wsRPCBase *p = (struct wsRPCBase *)list;
+    p->code = kCGGetDisplaysWithOpenGLDisplayMask;
+    p->len = 0;
+    uint32_t *q = (uint32_t *)(list + sizeof(struct wsRPCBase));
+    int j = 0;
+    for(int i = 0; i < [displays count]; ++i) {
+        WSDisplay *d = [displays objectAtIndex:i];
+        if([d openGLMask] & mask)
+            q[j++] = [d getDisplayID];
+    }
+    p->len = j * sizeof(uint32_t);
+    [self sendInlineData:list length:size withCode:MSG_ID_RPC toPort:msg->descriptor.name];
+    free(list);
+}
+
+- (void)rpcGetDisplaysWithPoint:(PortMessage *)msg {
+    struct wsRPCSimple *args = (struct wsRPCSimple *)msg->data;
+    NSPoint point = NSMakePoint(args->val1, args->val2);
+
+    size_t size = sizeof(struct wsRPCBase) + sizeof(uint32_t)*[displays count];
+    uint8_t *list = malloc(size);
+    struct wsRPCBase *p = (struct wsRPCBase *)list;
+    p->code = kCGGetDisplaysWithPoint;
+    p->len = 0;
+    uint32_t *q = (uint32_t *)(list + sizeof(struct wsRPCBase));
+    int j = 0;
+    for(int i = 0; i < [displays count]; ++i) {
+        WSDisplay *d = [displays objectAtIndex:i];
+        if(NSPointInRect(point, [d geometry])) // FIXME: this should refer to global coordinates
+            q[j++] = [d getDisplayID];
+    }
+    p->len = j * sizeof(uint32_t);
+    [self sendInlineData:list length:size withCode:MSG_ID_RPC toPort:msg->descriptor.name];
+    free(list);
+}
+
+- (void)rpcGetDisplaysWithRect:(PortMessage *)msg {
+    struct wsRPCSimple *args = (struct wsRPCSimple *)msg->data;
+    NSRect rect = NSMakeRect(args->val1, args->val2, args->val3, args->val4);
+
+    size_t size = sizeof(struct wsRPCBase) + sizeof(uint32_t)*[displays count];
+    uint8_t *list = malloc(size);
+    struct wsRPCBase *p = (struct wsRPCBase *)list;
+    p->code = kCGGetDisplaysWithRect;
+    p->len = 0;
+    uint32_t *q = (uint32_t *)(list + sizeof(struct wsRPCBase));
+    int j = 0;
+    for(int i = 0; i < [displays count]; ++i) {
+        WSDisplay *d = [displays objectAtIndex:i];
+        if(NSIntersectsRect([d geometry], rect)) // FIXME: this should refer to global coordinates
+            q[j++] = [d getDisplayID];
+    }
+    p->len = j * sizeof(uint32_t);
+    [self sendInlineData:list length:size withCode:MSG_ID_RPC toPort:msg->descriptor.name];
+    free(list);
+}
+
+- (void)rpcOpenGLDisplayMaskToDisplayID:(PortMessage *)msg {
+    struct wsRPCSimple *args = (struct wsRPCSimple *)msg->data;
+    CGOpenGLDisplayMask mask = args->val1;
+
+    struct wsRPCSimple reply = {0};
+    reply.base.code = kCGOpenGLDisplayMaskToDisplayID;
+    reply.val1 = kCGNullDirectDisplay;
+    reply.base.len = 4;
+
+    for(int i = 0; i < [displays count]; ++i) {
+        WSDisplay *d = [displays objectAtIndex:i];
+        if([d openGLMask] & mask)
+            reply.val1 = [d getDisplayID];
+    }
+    [self sendInlineData:&reply length:sizeof(reply) withCode:MSG_ID_RPC toPort:msg->descriptor.name];
+}
+
+- (void)rpcDisplayIDToOpenGLDisplayMask:(PortMessage *)msg {
+    struct wsRPCSimple *args = (struct wsRPCSimple *)msg->data;
+    CGDirectDisplayID ID = args->val1;
+
+    struct wsRPCSimple reply = {0};
+    reply.base.code = kCGDisplayIDToOpenGLDisplayMask;
+    reply.base.len = 4;
+
+    for(int i = 0; i < [displays count]; ++i) {
+        WSDisplay *d = [displays objectAtIndex:i];
+        if([d getDisplayID] == ID)
+            reply.val1 = [d openGLMask];
+    }
+    [self sendInlineData:&reply length:sizeof(reply) withCode:MSG_ID_RPC toPort:msg->descriptor.name];
+}
+
+- (void)rpcDisplayCapture:(PortMessage *)msg {
+
+}
+
+- (void)rpcCaptureAllDisplays:(PortMessage *)msg {
+
+}
+
+- (void)rpcReleaseAllDisplays:(PortMessage *)msg {
+
+}
+
+- (void)rpcDisplayGetDrawingContext:(PortMessage *)msg {
+
+}
+
+- (void)rpcDisplayCreateImageForRect:(PortMessage *)msg {
+
+}
+
+
 - (void)receiveMachMessage {
     ReceiveMessage msg = {0};
     mach_msg_return_t result = mach_msg((mach_msg_header_t *)&msg, MACH_RCV_MSG, 0, sizeof(msg),
@@ -474,32 +636,32 @@
                     reply = msg.portMsg.descriptor.name;
                 pid_t pid = msg.portMsg.pid;
                 NSString *bundleID = nil;
-                if(msg.portMsg.bundleID != '\0')
+                if(msg.portMsg.bundleID[0] != '\0')
                     bundleID = [NSString stringWithCString:msg.portMsg.bundleID];
                 else
                     bundleID = [NSString stringWithFormat:@"unix.%u", pid];
-                NSLog(@"RPC[%@ %u] reply %u data len %u", bundleID, pid, reply, msg.portMsg.len);
+                struct wsRPCBase *base = (struct wsRPCBase *)msg.portMsg.data;
 
-                if(msg.portMsg.msgh_descriptor_count == 0)
-                    break;
+                NSLog(@"RPC[%@ %u] reply %u data len %u code %u", bundleID, pid, reply, msg.portMsg.len, base->code);
 
-                struct mach_display_info info = {
-                    1, _geometry.size.width, _geometry.size.height, [fb getDepth]
-                };
-
-                Message msg = {0};
-                msg.header.msgh_remote_port = reply;
-                msg.header.msgh_bits = MACH_MSGH_BITS_SET(MACH_MSG_TYPE_COPY_SEND, 0, 0, 0);
-                msg.header.msgh_id = MSG_ID_RPC;
-                msg.header.msgh_size = sizeof(msg) - sizeof(mach_msg_trailer_t);
-                msg.pid = getpid();
-                strncpy(msg.bundleID, WINDOWSERVER_SVC_NAME, sizeof(msg.bundleID)-1);
-                memcpy(msg.data, &info, sizeof(struct mach_display_info));
-                msg.len = sizeof(struct mach_display_info);
-                NSLog(@"RPC[%@ %u] sending reply of %u bytes", bundleID, pid, msg.len);
-
-                int ret = mach_msg((mach_msg_header_t *)&msg, MACH_SEND_MSG|MACH_SEND_TIMEOUT,
-                    sizeof(msg) - sizeof(mach_msg_trailer_t), 0, MACH_PORT_NULL, 1000, MACH_PORT_NULL);
+                switch(base->code) {
+                    case kCGMainDisplayID: [self rpcMainDisplayID:&msg.portMsg]; break;
+                    case kCGGetOnlineDisplayList: [self rpcGetOnlineDisplayList:&msg.portMsg]; break;
+                    case kCGGetActiveDisplayList: [self rpcGetActiveDisplayList:&msg.portMsg]; break;
+                    case kCGGetDisplaysWithOpenGLDisplayMask: [self rpcGetDisplaysWithOpenGLDisplayMask:&msg.portMsg];
+                                                              break;
+                    case kCGGetDisplaysWithPoint: [self rpcGetDisplaysWithPoint:&msg.portMsg]; break;
+                    case kCGGetDisplaysWithRect: [self rpcGetDisplaysWithRect:&msg.portMsg]; break;
+                    case kCGOpenGLDisplayMaskToDisplayID: [self rpcOpenGLDisplayMaskToDisplayID:&msg.portMsg];
+                                                          break;
+                    case kCGDisplayIDToOpenGLDisplayMask: [self rpcDisplayIDToOpenGLDisplayMask:&msg.portMsg];
+                                                          break;
+                    case kCGDisplayCaptureWithOptions: [self rpcDisplayCapture:&msg.portMsg]; break;
+                    case kCGCaptureAllDisplaysWithOptions: [self rpcCaptureAllDisplays:&msg.portMsg]; break;
+                    case kCGReleaseAllDisplays: [self rpcReleaseAllDisplays:&msg.portMsg]; break;
+                    case kCGDisplayGetDrawingContext: [self rpcDisplayGetDrawingContext:&msg.portMsg]; break;
+                    case kCGDisplayCreateImageForRect: [self rpcDisplayCreateImageForRect:&msg.portMsg]; break;
+                }
                 break;
             }
             case MSG_ID_PORT:
@@ -532,7 +694,7 @@
                 [self sendInlineData:&info
                           length:sizeof(struct mach_display_info)
                         withCode:CODE_DISPLAY_INFO
-                           toApp:rec];
+                           toPort:[rec port]];
                 break;
             }
             case MSG_ID_INLINE:
@@ -647,7 +809,7 @@
                             [self sendInlineData:&reply
                                           length:sizeof(struct mach_win_data)
                                         withCode:CODE_WINDOW_CREATED
-                                           toApp:app];
+                                           toPort:[app port]];
                             return;
                         }
                         NSLog(@"No matching app for WINDOW_CREATE! %s %u", msg.msg.bundleID, msg.msg.pid);
@@ -825,7 +987,7 @@
     return [self sendInlineData:event
                          length:sizeof(struct mach_event)
                        withCode:CODE_INPUT_EVENT
-                          toApp:app];
+                          toPort:[app port]];
 }
 
 - (void)updateClientWindowState:(WSWindowRecord *)window {
@@ -850,14 +1012,12 @@
 
     WSAppRecord *app = [apps objectForKey:[NSString stringWithCString:key]];
     if(app)
-        [self sendInlineData:&data length:sizeof(data) withCode:CODE_WINDOW_STATE toApp:app];
+        [self sendInlineData:&data length:sizeof(data) withCode:CODE_WINDOW_STATE toPort:[app port]];
     else
         NSLog(@"Cannot send window state update to app: not found. %@", window);
 }
 
-- (BOOL)sendInlineData:(void *)data length:(int)length withCode:(int)code toApp:(WSAppRecord *)app {
-    mach_port_t port = [app port];
-
+- (BOOL)sendInlineData:(void *)data length:(int)length withCode:(int)code toPort:(mach_port_t)port {
     Message msg = {0};
     msg.header.msgh_remote_port = port;
     msg.header.msgh_bits = MACH_MSGH_BITS_SET(MACH_MSG_TYPE_COPY_SEND, 0, 0, 0);
@@ -875,7 +1035,7 @@
         sizeof(msg) - sizeof(mach_msg_trailer_t), 0, MACH_PORT_NULL, 50 /* ms timeout */,
         MACH_PORT_NULL)) != MACH_MSG_SUCCESS) {
         if(logLevel >= WS_WARNING)
-            NSLog(@"Failed to send message to PID %d on port %d: 0x%x", [app pid], port, ret);
+            NSLog(@"Failed to send message to port %d: 0x%x", port, ret);
         return NO;
     }
     return YES;
@@ -937,7 +1097,7 @@
     [self sendInlineData:&data
                   length:sizeof(data)
                 withCode:CODE_ACTIVATION_STATE
-                   toApp:oldApp];
+                  toPort:[oldApp port]];
 
     // Inform the now-active app of its status
     data.windowID = (curWindow == nil) ? 0 : curWindow.number;
@@ -945,7 +1105,7 @@
     [self sendInlineData:&data
                   length:sizeof(data)
                 withCode:CODE_ACTIVATION_STATE
-                   toApp:curApp];
+                   toPort:[curApp port]];
 }
 
 -(void)signalQuit { ready = NO; }
