@@ -97,6 +97,10 @@
     NSUnimplementedMethod();
 }
 
+-(void)drawWithCursor:(O2Image *)cursor inRect:(O2Rect)rect {
+    NSUnimplementedMethod();
+}
+
 -(O2Context *)context {
     if(_captured != 0)
         return captureCtx;
@@ -131,6 +135,10 @@
     if(!_captured)
         return 0;
     return shmid;
+}
+
+-(O2ImageRef)imageForRect:(O2Rect)rect {
+    return O2ImageCreateWithImageInRect([[self context] surface], rect);
 }
 
 @end

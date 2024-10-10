@@ -39,6 +39,8 @@
 #include <sys/param.h>
 #include <sys/sysctl.h>
 #include <sys/user.h>
+#include <sys/shm.h>
+#include <sys/ipc.h>
 
 #import "rpc.h"
 
@@ -450,7 +452,7 @@
         ctx = [fb context];
         pid_t capturedPID = [fb captured];
         if(capturedPID == 0) {
-            O2ContextSetRGBFillColor(ctx, 0.2, 0.2, 0.2, 1);
+            O2ContextSetRGBFillColor(ctx, 0.333, 0.333, 0.333, 1);
             O2ContextFillRect(ctx, (O2Rect)_geometry);
             NSEnumerator *appEnum = [apps objectEnumerator];
             WSAppRecord *app;
@@ -469,10 +471,13 @@
 
         cursorRect.origin = [input pointerPos];
         cursorRect.origin.y -= _cursor_height; // make sure point of arrow is on actual spot
-        O2ContextSetBlendMode(ctx, kCGBlendModeNormal);
-        O2ContextDrawImage(ctx, cursorRect, cursor);
 
-        [fb draw];
+        if(capturedPID == 0) {
+            O2ContextSetBlendMode(ctx, kCGBlendModeNormal);
+            O2ContextDrawImage(ctx, cursorRect, cursor);
+            [fb draw];
+        } else
+            [fb drawWithCursor:cursor inRect:cursorRect];
     }
 
 }
@@ -672,7 +677,34 @@
 }
 
 - (void)rpcDisplayCreateImageForRect:(PortMessage *)msg {
-
+    struct wsRPCSimple *args = (struct wsRPCSimple *)msg->data;
+    struct wsRPCSimple reply = { {kCGDisplayCreateImageForRect, 4}, 0 };
+    WSDisplay *display = [self displayWithID:args->val1];
+    if(display) {
+        O2Rect rect;
+        rect.origin.x = (args->val2 & 0xFFFF0000) >> 16;
+        rect.origin.y = (args->val2 & 0xFFFF);
+        rect.size.width = (args->val3 & 0xFFFF0000) >> 16;
+        rect.size.height = (args->val3 & 0xFFFF);
+        if(rect.origin.x == 0 && rect.origin.y == 0 && rect.size.width == 0 && rect.size.height == 0)
+            rect = [display geometry];
+        O2ImageRef img = [display imageForRect:rect];
+        int imglen = 0;
+        if(img) {
+            imglen = O2ImageGetBytesPerRow(img) * O2ImageGetHeight(img);
+            reply.val1 = shmget(args->val1 ^ random(), imglen, IPC_CREAT|0666);
+        }
+        if(reply.val1) {
+            uint8_t *p = shmat(reply.val1, NULL, 0);
+            if(!p)
+                shmctl(reply.val1, IPC_RMID, NULL);
+            else {
+                memcpy(p, [img directBytes], imglen);
+                shmdt(p);
+            }
+        }
+    }
+    [self sendInlineData:&reply length:sizeof(reply) withCode:MSG_ID_RPC toPort:msg->descriptor.name];
 }
 
 

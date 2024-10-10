@@ -68,6 +68,7 @@ typedef enum WSDisplayFlags : uint32_t {
 -(CGRect)geometry;
 -(void)clear;
 -(void)draw;
+-(void)drawWithCursor:(O2Image *)cursor inRect:(O2Rect)rect;
 -(int)getDepth;
 -(int)format;
 -(O2Context *)context;
@@ -75,6 +76,7 @@ typedef enum WSDisplayFlags : uint32_t {
 -(O2Context *)getCapturedContext;
 -(uint32_t)getCapturedContextID;
 -(uint32_t)getCapturedContextID:(uintptr_t *)addr size:(uint32_t *)size;
+-(O2ImageRef)imageForRect:(O2Rect)rect;
 
 @end
 
