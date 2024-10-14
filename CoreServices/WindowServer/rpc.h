@@ -44,15 +44,11 @@ typedef enum WSRPC {
     kCGDisplayGetDrawingContext,
     // Creating Images from Displays
     kCGDisplayCreateImageForRect,
-    // Retrieving Display Parameters
-    kCGDisplayBounds,
-    kCGDisplayIsActive,
-    kCGDisplayIsAlwaysInMirrorSet,
-    kCGDisplayIsAsleep,
-    kCGDisplayIsBuiltin,
-    kCGDisplayIsInHWMirrorSet,
-    kCGDisplayIsInMirrorSet,
-    kCGDisplayIsOnline,
+    // Configuring Displays
+    kCGCompleteDisplayConfiguration,
+    kCGRestorePermanentDisplayConfiguration,
+    // Getting the Display Configuration
+    kCGDisplayStateFlags,
     kCGDisplayMirrorsDisplay,
     kCGDisplayModelNumber,
     kCGDisplayPrimaryDisplay,
@@ -62,7 +58,12 @@ typedef enum WSRPC {
     kCGDisplayUnitNumber,
     kCGDisplayUsesOpenGLAcceleration,
     kCGDisplayVendorNumber,
-
+    // Retrieving Display Parameters
+    kCGDisplayBounds,
+    // Creating and Managing Display Modes
+    kCGDisplayCopyDisplayMode,
+    kCGDisplayCopyAllDisplayModes,
+    kCGDisplaySetDisplayMode,
 } WSRPC;
 
 /* Data field header, followed by function-specific data struct */
@@ -78,4 +79,54 @@ struct wsRPCSimple {
     uint32_t val3;
     uint32_t val4;
 };
+
+typedef enum WSDisplayFlags : uint32_t {
+    kWSDisplayActive = (1 << 0),
+    kWSDisplayOnline = (1 << 1),
+    kWSDisplaySleeping = (1 << 2),
+    kWSDisplayMirrored = (1 << 3),
+    kWSDisplayPrimary = (1 << 4),
+    kWSDisplayMain = (1 << 5),
+    kWSDisplayBuiltin = (1 << 6),
+    kWSDisplayStereo = (1 << 7),
+    kWSDisplayHWMirror = (1 << 8)
+} WSDisplayFlags;
+
+struct CGDisplayMode {
+    int refcount;
+    uint32_t width;
+    uint32_t height;
+    uint32_t depth;
+    float refresh;
+    uint32_t flags;
+};
+
+struct _CGDispCfgMirror {
+    uint32_t opcode;
+    uint32_t display;
+    uint32_t primary;
+};
+
+struct _CGDispCfgOrigin {
+    uint32_t opcode;
+    uint32_t display;
+    int32_t x;
+    int32_t y;
+};
+
+struct _CGDispCfgMode {
+    uint32_t opcode;
+    uint32_t display;
+    struct CGDisplayMode mode; // copied in
+};
+
+struct _CGDisplayConfigInner {
+    struct wsRPCBase rpc;
+    uint32_t length;    // total length of object
+    uint32_t option;    // scope of change
+};
+
+#define CGDISPCFG_MIRROR 100
+#define CGDISPCFG_ORIGIN 101
+#define CGDISPCFG_MODE 102
 

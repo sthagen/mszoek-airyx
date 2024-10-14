@@ -24,6 +24,7 @@
 #import <sys/types.h>
 #import <sys/ipc.h>
 #import <sys/shm.h>
+#import "rpc.h" // for mode definitions
 
 @implementation BSDFramebuffer
 
@@ -64,6 +65,14 @@
     depth = fb.fb_depth;
     width = fb.fb_width;
     height = fb.fb_height;
+
+    _currentMode->width = width;
+    _currentMode->height = height;
+    _currentMode->depth = depth;
+    _currentMode->refresh = 0; // FIXME: can we get this?
+    _currentMode->flags = 0;
+
+    CFArrayAppendValue(_allModes, CGDisplayModeRetain(_currentMode));
 
     size_t pagemask = getpagesize() - 1;
     size = (stride * height + pagemask) & ~pagemask;
@@ -198,6 +207,11 @@
 /* FIXME: this should hash the vendor, model, serial, and other data */
 - (uint32_t)getDisplayID {
     return 0xf07f0a10; // arbitrary ID
+}
+
+// we can't change resolutions without a drm driver so this will always fail
+-(BOOL)setMode:(struct CGDisplayMode *)mode {
+    return NO;
 }
 
 @end

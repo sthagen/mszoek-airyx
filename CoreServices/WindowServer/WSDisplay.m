@@ -23,11 +23,14 @@
 #import <Foundation/NSRaise.h>
 #import <CoreGraphics/CGImage.h>
 #import "WSDisplay.h"
+#import "rpc.h" // for flags constants
+
+extern struct CGDisplayMode *CGDisplayModeRetain(struct CGDisplayMode *);
 
 @implementation WSDisplay
 -init {
     self = [super init];
-    _flags = 0xFFFFFFFF;
+    _flags = 0;
     _openGLMask = 0x1;
     _captured = 0;
     width = 0;
@@ -38,7 +41,19 @@
     activeCtx = NULL;
     shmid = 0;
     shmSize = 0;
+    _mirrorOf = nil;
+    _rotation = 0;
+    _primaryDisplay = nil;
+    _currentMode = calloc(sizeof(struct CGDisplayMode), 1);
+    CGDisplayModeRetain(_currentMode);
+    _allModes = CFArrayCreateMutable(NULL, 32, NULL);
     return self;
+}
+
+-(void)dealloc {
+    for(int i = 0; i < CFArrayGetCount(_allModes); ++i)
+        CGDisplayModeRelease(CFArrayGetValueAtIndex(_allModes, i));
+    CGDisplayModeRelease(_currentMode);
 }
 
 -(uint32_t)getDisplayID {
@@ -59,6 +74,10 @@
 
 -(BOOL)isMain {
     return (_flags & kWSDisplayMain);
+}
+
+-(uint32_t)flags {
+    return _flags;
 }
 
 -(uint32_t)openGLMask {
@@ -141,5 +160,88 @@
     return O2ImageCreateWithImageInRect([[self context] surface], rect);
 }
 
-@end
+-(float)rotation {
+    return _rotation;
+}
 
+// positive is clockwise, negative is counter-clockwise
+-(BOOL)rotate:(float)degrees {
+    _rotation += degrees;
+}
+
+-(WSDisplay *)mirrorOf {
+    return _mirrorOf;
+}
+
+// pass in nil to turn off mirroring
+-(BOOL)mirror:(WSDisplay *)display {
+    if(display)
+        _flags |= kWSDisplayMirrored;
+    else
+        _flags &= ~kWSDisplayMirrored;
+    _mirrorOf = display;
+    return (_mirrorOf == nil) ? NO : YES;
+}
+
+-(uint32_t)modelNumber {
+    return 0; // implement in backend class
+}
+
+-(uint32_t)vendorNumber {
+    return 0; // implement in backend class
+}
+
+-(uint32_t)serialNumber {
+    return 0; // implement in backend class
+}
+
+-(WSDisplay *)primaryDisplay {
+    if(_flags & kWSDisplayHWMirror)
+        if(!(_flags & kWSDisplayPrimary))
+            return _primaryDisplay;
+    return self;
+}
+
+// override in backend class with EDID if available
+-(CGSize)screenSizeMM {
+   return NSMakeSize(2.835*width, 2.835*height);
+   // https://developer.apple.com/documentation/coregraphics/1456599-cgdisplayscreensize?language=objc
+}
+
+// override in backend class
+-(void)restorePermanentConfig {
+    return;
+}
+
+-(BOOL)setOriginX:(int32_t)x Y:(int32_t)y {
+    // FIXME: implement this
+}
+
+// override in backend class
+-(BOOL)setMode:(struct CGDisplayMode *)mode {
+    CGDisplayModeRelease(_currentMode);
+    _currentMode = CGDisplayModeRetain(mode);
+    return YES;
+}
+
+-(void)saveAppConfig {
+    NSLog(@"%@ save app config", self);
+}
+
+-(void)saveSessionConfig {
+    NSLog(@"%@ save session config", self);
+}
+
+-(void)savePermanentConfig {
+    NSLog(@"%@ save permanent config", self);
+}
+
+-(struct CGDisplayMode *)currentMode {
+    return _currentMode;
+}
+
+-(CFArrayRef)allModes {
+    return _allModes;
+}
+
+@end
