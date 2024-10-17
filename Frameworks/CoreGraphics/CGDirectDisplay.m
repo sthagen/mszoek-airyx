@@ -49,6 +49,14 @@ struct _CGDisplayConfig {
     struct _CGDisplayConfigInner *inner;
 };
 
+static struct CGDisplayStream {
+    uintptr_t cfisa;
+};
+
+static struct CGDisplayStreamUpdate {
+    uintptr_t cfisa;
+};
+
 // dictionary of display contexts
 static CFMutableDictionaryRef __displayContexts = NULL;
 static const CFDictionaryKeyCallBacks __CGDispCtxKeyCallback = {0}; // all NULL - use defaults
@@ -673,8 +681,6 @@ CGDisplayModeRef CGDisplayCopyDisplayMode(CGDirectDisplayID display) {
             if(ret) {
                 memcpy(ret, &reply.mode, sizeof(struct CGDisplayMode));
                 // we don't retain ret because it already has a refcount from WS
-                NSLog(@"got mode! %ux%u %.02f Hz flags %08x", ret->width, ret->height,
-                        ret->refresh, ret->flags);
             }
             return ret;
         }
@@ -700,8 +706,6 @@ CFArrayRef CGDisplayCopyAllDisplayModes(CGDirectDisplayID display, CFDictionaryR
                 if(entry) {
                     memcpy(entry, &reply.mode[i], sizeof(struct CGDisplayMode));
                     // we don't retain entry because it already has a refcount from WS
-                    NSLog(@"got mode! %ux%u %.02f Hz flags %08x", entry->width, entry->height,
-                            entry->refresh, entry->flags);
                     CFArrayAppendValue(entries, entry);
                 }
             }
@@ -742,7 +746,6 @@ CGDisplayModeRef CGDisplayModeRetain(CGDisplayModeRef mode) {
     if(mode != NULL) {
         int one = 1;
         __sync_fetch_and_add(&(mode->refcount), one);
-        NSLog(@"retained mode %p -> %d", mode, mode->refcount);
     }
     return mode;
 }
@@ -753,7 +756,6 @@ void CGDisplayModeRelease(CGDisplayModeRef mode) {
 
     int one = 1;
     int count = __sync_fetch_and_sub(&(mode->refcount), one);
-    NSLog(@"released mode %p -> %d", mode, mode->refcount);
 
     if(count == 1) // we just released the last ref
         free(mode);
@@ -800,6 +802,295 @@ CFTypeID CGDisplayModeGetTypeID(void) {
     return 0; // FIXME
 }
 
+// Adjusting the Display Gamma
+CGError CGSetDisplayTransferByFormula(CGDirectDisplayID display,
+        CGGammaValue redMin, CGGammaValue redMax, CGGammaValue redGamma,
+        CGGammaValue greenMin, CGGammaValue greenMax, CGGammaValue greenGamma,
+        CGGammaValue blueMin, CGGammaValue blueMax, CGGammaValue blueGamma) {
+    if(redMin > redMax || redMin < 0 ||
+        greenMin > greenMax || greenMin < 0 ||
+        blueMin > blueMax || blueMin < 0 ||
+        redMax < redMin || redMax > 1 ||
+        greenMax < greenMin || greenMax > 1 ||
+        blueMax < blueMin || blueMax > 1)
+            return kCGErrorIllegalArgument;
+
+    struct {
+        struct wsRPCBase base;
+        uint32_t display;
+        CGGammaValue vals[9];
+    } data;
+    data.base.code = kCGSetDisplayTransferByFormula;
+    data.base.len = sizeof(data) - sizeof(struct wsRPCBase);
+    data.display = display;
+    data.vals[0] = redMin;
+    data.vals[1] = redMax;
+    data.vals[2] = redGamma;
+    data.vals[3] = greenMin;
+    data.vals[4] = greenMax;
+    data.vals[5] = greenGamma;
+    data.vals[6] = blueMin;
+    data.vals[7] = blueMax;
+    data.vals[8] = blueGamma;
+
+    struct wsRPCSimple reply = {0};
+    int len = sizeof(reply);
+    kern_return_t ret = _windowServerRPC(&data, sizeof(data), &reply, &len);
+
+    if(ret == KERN_SUCCESS) {
+        return reply.val1;
+    }
+    return kCGErrorFailure;
+}
+
+CGError CGGetDisplayTransferByFormula(CGDirectDisplayID display,
+        CGGammaValue *redMin, CGGammaValue *redMax, CGGammaValue *redGamma,
+        CGGammaValue *greenMin, CGGammaValue *greenMax, CGGammaValue *greenGamma,
+        CGGammaValue *blueMin, CGGammaValue *blueMax, CGGammaValue *blueGamma) {
+    if(redMin == NULL || redMax == NULL || redGamma == NULL ||
+        greenMin == NULL || greenMax == NULL || greenGamma == NULL ||
+        blueMin == NULL || blueMax == NULL || blueGamma == NULL)
+            return kCGErrorIllegalArgument;
+
+    struct {
+        struct wsRPCBase base;
+        uint32_t display;
+        CGGammaValue vals[9];
+    } data;
+    data.base.code = kCGGetDisplayTransferByFormula;
+    data.base.len = sizeof(data) - sizeof(struct wsRPCBase);
+    data.display = display;
+
+    int len = sizeof(data);
+    kern_return_t ret = _windowServerRPC(&data, sizeof(data), &data, &len);
+
+    if(ret == KERN_SUCCESS) {
+        *redMin = data.vals[0];
+        *redMax = data.vals[1];
+        *redGamma = data.vals[2];
+        *greenMin = data.vals[3];
+        *greenMax = data.vals[4];
+        *greenGamma = data.vals[5];
+        *blueMin = data.vals[6];
+        *blueMax = data.vals[7];
+        *blueGamma = data.vals[8];
+        return data.display; // actually our return value
+    }
+    return kCGErrorFailure;
+}
+
+CGError CGSetDisplayTransferByTable(CGDirectDisplayID display, uint32_t tableSize,
+        const CGGammaValue *redTable, const CGGammaValue *greenTable, const CGGammaValue *blueTable) {
+    if(redTable == NULL || greenTable == NULL || blueTable == NULL || tableSize < 0)
+        return kCGErrorIllegalArgument;
+    if(tableSize == 0)
+        return kCGErrorSuccess; // nothing to do
+
+    size_t dataSize = 3 * tableSize * sizeof(CGGammaValue) + sizeof(struct wsRPCSimple);
+    if(dataSize > 128*1024)
+        return kCGErrorFailure;
+
+    char *data = calloc(dataSize, 1);
+    if(data == NULL)
+        return kCGErrorFailure;
+
+    struct wsRPCSimple *base = data;
+    base->base.code = kCGSetDisplayTransferByTable;
+    base->base.len = dataSize - sizeof(struct wsRPCBase) + 4;
+    base->val1 = display;
+
+    CGGammaValue *p = (CGGammaValue *)(data + sizeof(struct wsRPCBase) + 4);
+
+    for(int i = 0; i < tableSize; ++i) {
+        *p++ = redTable[i];
+        *p++ = greenTable[i];
+        *p++ = blueTable[i];
+    }
+
+    int len = dataSize;
+    kern_return_t ret = _windowServerRPC(&data, dataSize, &data, &len);
+    free(data);
+
+    if(ret == KERN_SUCCESS) {
+        return base->val1;
+    }
+    return kCGErrorFailure;
+}
+
+
+CGError CGGetDisplayTransferByTable(CGDirectDisplayID display, uint32_t capacity,
+        CGGammaValue *redTable, CGGammaValue *greenTable, CGGammaValue *blueTable, uint32_t *sampleCount) {
+    if(redTable == NULL || greenTable == NULL || blueTable == NULL || capacity <= 0)
+        return kCGErrorIllegalArgument;
+
+    struct wsRPCSimple data = { {kCGGetDisplayTransferByTable, 4}, 0, 0, 0, 0 };
+    data.val1 = display;
+    int len = sizeof(data);
+
+    kern_return_t ret = _windowServerRPC(&data, sizeof(data), &data, &len);
+    if(ret != KERN_SUCCESS)
+        return kCGErrorFailure;
+
+    int samples = 0;
+    struct { CGGammaValue r; CGGammaValue g; CGGammaValue b; } *vals = &(data.val2);
+    for(int i = 0; i < capacity; ++i) {
+        if(i * 3 * sizeof(CGGammaValue) > data.base.len)
+            break;
+        *(redTable + i) = vals->r;
+        *(greenTable + i) = vals->g;
+        *(blueTable + i) = vals->b;
+        vals += sizeof(CGGammaValue) * 3;
+        samples++;
+    }
+    *sampleCount = samples;
+    return kCGErrorSuccess;
+}
+
+CGError CGSetDisplayTransferByByteTable(CGDirectDisplayID display, uint32_t tableSize,
+        const uint8_t *redTable, const uint8_t *greenTable, const uint8_t *blueTable) {
+    if(redTable == NULL || greenTable == NULL || blueTable == NULL || tableSize < 0)
+        return kCGErrorIllegalArgument;
+    if(tableSize == 0)
+        return kCGErrorSuccess; // nothing to do
+
+    size_t dataSize = 3 * tableSize + sizeof(struct wsRPCSimple);
+    if(dataSize > 128*1024)
+        return kCGErrorFailure;
+
+    char *data = calloc(dataSize, 1);
+    if(data == NULL)
+        return kCGErrorFailure;
+
+    struct wsRPCSimple *base = data;
+    base->base.code = kCGSetDisplayTransferByByteTable;
+    base->base.len = dataSize - sizeof(struct wsRPCBase) + 4;
+    base->val1 = display;
+
+    uint8_t *p = data + sizeof(struct wsRPCBase) + 4;
+
+    for(int i = 0; i < tableSize; ++i) {
+        *p++ = redTable[i];
+        *p++ = greenTable[i];
+        *p++ = blueTable[i];
+    }
+
+    int len = dataSize;
+    kern_return_t ret = _windowServerRPC(&data, dataSize, &data, &len);
+    free(data);
+
+    if(ret == KERN_SUCCESS) {
+        return base->val1;
+    }
+    return kCGErrorFailure;
+}
+
+void CGDisplayRestoreColorSyncSettings(void) {
+    struct wsRPCBase data = {kCGDisplayRestoreColorSyncSettings, 0};
+    _windowServerRPC(&data, sizeof(data), NULL, NULL);
+}
+
+uint32_t CGDisplayGammaTableCapacity(CGDirectDisplayID display) {
+    struct wsRPCSimple data = { {kCGDisplayGammaTableCapacity, 4}, 0, 0, 0, 0};
+    data.val1 = display;
+    int len = sizeof(data);
+    kern_return_t ret = _windowServerRPC(&data, sizeof(data), &data, &len);
+
+    if(ret == KERN_SUCCESS) {
+        return data.val1;
+    }
+    return 0;
+}
+
+// Display Fade Effects -- all stubs for now!
+CGError CGConfigureDisplayFadeEffect(CGDisplayConfigRef config, CGDisplayFadeInterval fadeOutSeconds, CGDisplayFadeInterval fadeInSeconds, float fadeRed, float fadeGreen, float fadeBlue) {
+    return kCGErrorFailure;
+}
+
+CGError CGAcquireDisplayFadeReservation(CGDisplayReservationInterval seconds, CGDisplayFadeReservationToken *token) {
+    return kCGErrorFailure;
+}
+
+CGError CGDisplayFade(CGDisplayFadeReservationToken token, CGDisplayFadeInterval duration, CGDisplayBlendFraction startBlend, CGDisplayBlendFraction endBlend, float redBlend, float greenBlend, float blueBlend, boolean_t synchronous) {
+    return kCGErrorFailure;
+}
+
+CGError CGReleaseDisplayFadeReservation(CGDisplayFadeReservationToken token) {
+    return kCGErrorFailure;
+}
+
+// Controlling the Mouse Cursor
+CGError CGDisplayHideCursor(CGDirectDisplayID display) {
+    struct wsRPCSimple data = { {kCGDisplayHideCursor, 0}, 0, 0, 0, 0 };
+    int len = sizeof(data);
+    kern_return_t ret = _windowServerRPC(&data, sizeof(data), &data, &len);
+
+    if(ret == KERN_SUCCESS) {
+        return data.val1;
+    }
+    return kCGErrorFailure;
+}
+
+CGError CGDisplayShowCursor(CGDirectDisplayID display) {
+    struct wsRPCSimple data = { {kCGDisplayShowCursor, 0}, 0, 0, 0, 0 };
+    int len = sizeof(data);
+    kern_return_t ret = _windowServerRPC(&data, sizeof(data), &data, &len);
+
+    if(ret == KERN_SUCCESS) {
+        return data.val1;
+    }
+    return kCGErrorFailure;
+}
+
+CGError CGDisplayMoveCursorToPoint(CGDirectDisplayID display, CGPoint point) {
+    struct wsRPCSimple data = { {kCGDisplayMoveCursorToPoint, 12}, 0, 0, 0, 0};
+    data.val1 = display;
+    data.val2 = point.x;
+    data.val3 = point.y;
+    int len = sizeof(data);
+    kern_return_t ret = _windowServerRPC(&data, sizeof(data), &data, &len);
+
+    if(ret == KERN_SUCCESS) {
+        return data.val1;
+    }
+    return kCGErrorFailure;
+}
+
+CGError CGAssociateMouseAndMouseCursorPosition(boolean_t connected) {
+    struct wsRPCSimple data = { {kCGAssociateMouseAndMouseCursorPosition, 4}, 0, 0, 0, 0};
+    data.val1 = connected;
+    int len = sizeof(data);
+    kern_return_t ret = _windowServerRPC(&data, sizeof(data), &data, &len);
+
+    if(ret == KERN_SUCCESS) {
+        return data.val1;
+    }
+    return kCGErrorFailure;
+}
+
+CGError CGWarpMouseCursorPosition(CGPoint newCursorPosition) {
+    struct wsRPCSimple data = { {kCGWarpMouseCursorPosition, 8}, 0, 0, 0, 0};
+    data.val1 = newCursorPosition.x;
+    data.val2 = newCursorPosition.y;
+    int len = sizeof(data);
+    kern_return_t ret = _windowServerRPC(&data, sizeof(data), &data, &len);
+
+    if(ret == KERN_SUCCESS) {
+        return data.val1;
+    }
+    return kCGErrorFailure;
+}
+
+void CGGetLastMouseDelta(int32_t *deltaX, int32_t *deltaY) {
+    struct wsRPCSimple data = { {kCGGetLastMouseDelta, 0}, 0, 0, 0, 0};
+    int len = sizeof(data);
+    kern_return_t ret = _windowServerRPC(&data, sizeof(data), &data, &len);
+
+    if(ret == KERN_SUCCESS) {
+        *deltaX = data.val1;
+        *deltaY = data.val2;
+    }
+}
+
 
 // WindowServer info
 CFDictionaryRef CGSessionCopyCurrentDictionary(void) {
@@ -821,8 +1112,61 @@ CFMachPortRef CGWindowServerCFMachPort(void) {
     return wsPort;
 }
 
+// The values below were obtained by testing macOS Sonoma
 CGWindowLevel CGWindowLevelForKey(CGWindowLevelKey key) {
+    if(key < 0 || key > kCGNumberOfWindowLevelKeys)
+        return -INT_MAX;
+    const int32_t levels[kCGNumberOfWindowLevelKeys] = {
+        -INT_MAX, -INT_MAX, -INT_MAX, -20, 0,
+        3, 3, 20, 24, 25, 8, 101, 500, 1000,
+        INT_MAX, 102, 200, 19, -INT_MAX, INT_MAX, 1500
+    };
+    return levels[key];
+}
 
+// Streaming the Display Contents -- all stubs for now! (deprecated after 14.4)
+
+CGDisplayStreamRef CGDisplayStreamCreate(CGDirectDisplayID display, size_t outputWidth, size_t outputHeight, int32_t pixelFormat, CFDictionaryRef properties, CGDisplayStreamFrameAvailableHandler handler) {
+    return NULL;
+}
+
+CGDisplayStreamRef CGDisplayStreamCreateWithDispatchQueue(CGDirectDisplayID display, size_t outputWidth, size_t outputHeight, int32_t pixelFormat, CFDictionaryRef properties, dispatch_queue_t queue, CGDisplayStreamFrameAvailableHandler handler) {
+    return NULL;
+}
+
+CGError CGDisplayStreamStart(CGDisplayStreamRef displayStream) {
+    return kCGErrorFailure;
+}
+
+CGError CGDisplayStreamStop(CGDisplayStreamRef displayStream) {
+    return kCGErrorSuccess;
+}
+
+CFRunLoopSourceRef CGDisplayStreamGetRunLoopSource(CGDisplayStreamRef displayStream) {
+    return NULL;
+}
+
+const CGRect * CGDisplayStreamUpdateGetRects(CGDisplayStreamUpdateRef updateRef, CGDisplayStreamUpdateRectType rectType, size_t *rectCount) {
+    return NULL;
+}
+
+CGDisplayStreamUpdateRef CGDisplayStreamUpdateCreateMergedUpdate(CGDisplayStreamUpdateRef firstUpdate, CGDisplayStreamUpdateRef secondUpdate) {
+    return NULL;
+}
+
+void CGDisplayStreamUpdateGetMovedRectsDelta(CGDisplayStreamUpdateRef updateRef, CGFloat *dx, CGFloat *dy) {
+}
+
+size_t CGDisplayStreamUpdateGetDropCount(CGDisplayStreamUpdateRef updateRef) {
+    return 0;
+}
+
+CFTypeID CGDisplayStreamGetTypeID(void) {
+    return 0;
+}
+
+CFTypeID CGDisplayStreamUpdateGetTypeID(void) {
+    return 0;
 }
 
 // Private functions
