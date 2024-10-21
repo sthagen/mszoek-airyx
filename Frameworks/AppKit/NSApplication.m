@@ -43,6 +43,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 #include <unistd.h>
 
 #import <WindowServer/message.h>
+#import <WindowServer/rpc.h>
 
 NSString * const NSModalPanelRunLoopMode=@"NSModalPanelRunLoopMode";
 NSString * const NSEventTrackingRunLoopMode=@"NSEventTrackingRunLoopMode";
@@ -159,41 +160,13 @@ static NSMenuItem *itemWithTag(NSMenu *root, int tag) {
             switch(msg.header.msgh_id) {
                 case MSG_ID_INLINE:
                     switch(msg.code) {
-                        // FIXME: move this to use Quartz Display Services
-                        // https://developer.apple.com/documentation/coregraphics/quartz_display_services?language=objc
-                        case CODE_DISPLAY_INFO: { 
-                            if(msg.len != sizeof(struct mach_display_info)) {
-                                NSLog(@"Incorrect data size in display info: %d vs %d", msg.len, sizeof(struct mach_display_info));
-                                break;
-                            }
-                            struct mach_display_info *info = (struct mach_display_info *)msg.data;
-                            NSLog(@"DISPLAY_INFO: configuring for %.0fx%.0f depth %u", info->width, 
-                                    info->height, info->depth);
-                            [_display configureWithInfo:info];
-                            break;
-                        }
-                        case CODE_WINDOW_CREATED: {
-                            if(msg.len != sizeof(struct mach_win_data)) {
-                                NSLog(@"Incorrect data size in window created: %d vs %d", msg.len, sizeof(struct mach_win_data));
-                                break;
-                            }
-                            struct mach_win_data *data = (struct mach_win_data *)msg.data;
-                            NSArray *args = [NSArray arrayWithObjects:
-                                              [NSNumber numberWithInt:data->windowID],
-                                            [NSNumber numberWithFloat:data->w],
-                                            [NSNumber numberWithFloat:data->h], nil];
-                            [self performSelectorOnMainThread:@selector(_windowFinishCreatingOnMainThread)
-                                                   withObject:args
-                                                waitUntilDone:NO
-                                                        modes:[NSArray arrayWithObject:NSDefaultRunLoopMode]];
-                            break;
-                        }
                         case CODE_WINDOW_STATE: {
-                            if(msg.len != sizeof(struct mach_win_data)) {
-                                NSLog(@"Incorrect data size in window state change: %d vs %d", msg.len, sizeof(struct mach_win_data));
+                            if(msg.len != sizeof(struct wsRPCWindow)) {
+                                NSLog(@"Incorrect data size in window state change: %d vs %d",
+                                        msg.len, sizeof(struct wsRPCWindow));
                                 break;
                             }
-                            struct mach_win_data *data = (struct mach_win_data *)msg.data;
+                            struct wsRPCWindow *data = (struct wsRPCWindow *)msg.data;
                             int _id = data->windowID;
                             NSWindow *window = [self windowWithWindowNumber:_id];
                             if(window == nil) {
@@ -333,23 +306,6 @@ static NSMenuItem *itemWithTag(NSMenu *root, int tag) {
     }
 }
 
--(void)_windowFinishCreatingOnMainThread:(NSArray *)args {
-    int number = [[args objectAtIndex:0] intValue];
-    float w = [[args objectAtIndex:1] floatValue];
-    float h = [[args objectAtIndex:2] floatValue];
-    NSWindow *window = [self windowWithWindowNumber:number];
-    if(window == nil) {
-        NSLog(@"WINDOW_CREATED: ID %u, not found in window list!", number);
-        return;
-    }
-    if([window platformWindow] == nil) {
-        NSLog(@"ERROR: platformWindow not created for ID %u", number);
-        return;
-    }
-    [[window platformWindow] invalidateContextsWithNewSize:NSMakeSize(w, h)
-                                              forceRebuild:YES];
-}
-
 -init {
     if(NSApp)
         NSAssert(!NSApp, @"NSApplication is a singleton");
@@ -395,7 +351,7 @@ static NSMenuItem *itemWithTag(NSMenu *root, int tag) {
             return nil;
         }
 
-        // register this app with WindowServer and get the display
+        // register this app with WindowServer so we get events
         PortMessage msg = {0};
         msg.header.msgh_remote_port = _wsSvcPort;
         msg.header.msgh_bits = MACH_MSGH_BITS_SET(MACH_MSG_TYPE_COPY_SEND, 0, 0, MACH_MSGH_BITS_COMPLEX);
