@@ -88,19 +88,21 @@ pthread_mutex_t renderLock;
     if(s_stopOnErr && [s_stopOnErr isEqualToString:@"YES"])
         stopOnErr = YES;
 
-    struct passwd *passwd = getpwnam("nobody");
-    if(!passwd) {
-        perror("getpwnam(nobody)");
-        return nil;
-    }
-    nobodyUID = passwd->pw_uid;
-
     struct group *group = getgrnam("video");
     if(!group) {
         perror("getgrnam(video)");
         return nil;
     }
     videoGID = group->gr_gid;
+ 
+    // ensure our helper is owned correctly
+    NSString *path = [[NSBundle mainBundle] pathForResource:@"SystemUIServer" ofType:@"app"];
+    if(path)
+        path = [[NSBundle bundleWithPath:path] pathForResource:@"shutdown" ofType:@""];
+    if(path) {
+        chown([path UTF8String], 0, videoGID);
+        chmod([path UTF8String], 04550);
+    }
 
     // FIXME: try drm/kms first then fall back
     fb = [BSDFramebuffer new];
@@ -122,7 +124,6 @@ pthread_mutex_t renderLock;
 
 -(void)dealloc {
     curShell = NONE;
-    //pthread_cancel(curShellThread);
     fb = nil;
     input = nil;
     if(kvm)
@@ -181,149 +182,6 @@ pthread_mutex_t renderLock;
     while(*envp != NULL)
         free(*envp++);
     free(envp);
-}
-
--(void *)launchShell {
-    int status;
-    NSString *lwPath = nil;
-
-    while(curShell != NONE) {
-        if(ready == NO) {
-            sleep(1);
-            continue;
-        }
-
-        switch(curShell) {
-            case LOGINWINDOW:
-                if(seteuid(0) != 0) { // re-assert privileges
-                    perror("seteuid");
-                    exit(-1);
-                }
-
-                if(setresgid(videoGID, videoGID, 0) != 0) {
-                    perror("setresgid");
-                    exit(-1);
-                }
-                if(setresuid(nobodyUID, nobodyUID, 0) != 0) {
-                    perror("setresuid");
-                    exit(-1);
-                }
-
-                int uid = nobodyUID;
-                int gid = videoGID;
-
-                int fds[2];
-                if(pipe(fds) != 0) {
-                    perror("pipe");
-                    exit(-1);
-                }
-                char fdbuf[8];
-                sprintf(fdbuf, "%d", fds[1]);
-                int status = -1;
-
-                lwPath = [[NSBundle mainBundle] pathForResource:@"LoginWindow" ofType:@"app"];
-                if(!lwPath) {
-                    NSLog(@"missing LoginWindow.app!");
-                    break;
-                }
-                lwPath = [[NSBundle bundleWithPath:lwPath] executablePath];
-                if(!lwPath) {
-                    NSLog(@"missing LoginWindow.app!");
-                    break;
-                }
-
-                if([self setUpEnviron:nobodyUID] == NO) {
-                    NSLog(@"Unable to set up environment for LoginWindow!");
-                    return NO;
-                }
-
-                pid_t pid = fork();
-                if(!pid) { // child
-                    close(fds[0]);
-                    seteuid(0);
-                    execle([lwPath UTF8String], [[lwPath lastPathComponent] UTF8String], fdbuf, NULL, envp);
-                    exit(-1);
-                } else {
-                    close(fds[1]);
-                    read(fds[0], &uid, sizeof(int));
-                    waitpid(pid, &status, 0);
-                }
-                [self freeEnviron];
-                close(fds[0]);
-                if(logLevel >= WS_INFO)
-                    NSLog(@"received uid %d", uid);
-
-                if(uid < 500) {
-                    NSLog(@"UID below minimum");
-                    break;
-                }
-
-                struct passwd *pw = getpwuid(uid);
-                if(!pw || pw->pw_uid != uid) {
-                    NSLog(@"no such uid %d", uid);
-                    break;
-                }
-                gid = pw->pw_gid;
-
-                if(seteuid(0) != 0) { // re-assert privileges
-                    perror("seteuid");
-                    return NO;
-                }
-
-                // ensure our helper is owned correctly
-                {
-                    NSString *path = [[NSBundle mainBundle] pathForResource:@"SystemUIServer" ofType:@"app"];
-                    if(path)
-                        path = [[NSBundle bundleWithPath:path] pathForResource:@"shutdown" ofType:@""];
-                    if(path) {
-                        chown([path UTF8String], 0, videoGID);
-                        chmod([path UTF8String], 04550);
-                    }
-                }
-
-                curShell = DESKTOP;
-                break;
-            case DESKTOP: {
-                [self setUpEnviron:uid];
-                pid_t pid = fork();
-                if(pid == 0) {
-                    setlogin(pw->pw_name);
-                    chdir(pw->pw_dir);
-
-                    login_cap_t *lc = login_getpwclass(pw);
-                    if (setusercontext(lc, pw, pw->pw_uid,
-                        LOGIN_SETALL & ~(LOGIN_SETLOGIN)) != 0) {
-                            perror("setusercontext");
-                            exit(-1);
-                    }
-                    login_close(lc);
-
-                    NSString *path = [[NSBundle mainBundle] pathForResource:@"SystemUIServer" ofType:@"app"];
-                    if(path)
-                        path = [[NSBundle bundleWithPath:path] executablePath];
-
-                    if(path)
-                        execle([path UTF8String], [[path lastPathComponent] UTF8String], NULL, envp);
-
-                    perror("execl");
-                    exit(-1);
-                } else if(pid < 0) {
-                    perror("fork");
-                    sleep(3);
-                    curShell = LOGINWINDOW;
-                    break;
-                }
-                [self freeEnviron];
-                waitpid(pid, &status, 0);
-                curShell = LOGINWINDOW;
-                // safety valve for debugging
-                if(stopOnErr)
-                    execl("/bin/launchctl", "launchctl", "remove", "com.ravynos.WindowServer", NULL);
-                break;
-            }
-        }
-    }
-    pthread_exit(NULL);
 }
 
 -(uint32_t)windowCreate:(struct wsRPCWindow *)data forApp:(WSAppRecord *)app {
@@ -434,8 +292,108 @@ pthread_mutex_t renderLock;
         NSLog(@"windowModify %@ win %@", app, winrec);
 }
 
+-(void)setShell:(int)shell {
+    curShell = shell;
+}
+
+-(void)launchShell:(id)object {
+    int status;
+    NSString *lwPath = nil;
+    uid_t uid = 0;
+    gid_t gid = 0;
+
+    while(curShell != NONE) {
+        switch(curShell) {
+            case LOGINWINDOW:
+                lwPath = [[NSBundle mainBundle] pathForResource:@"LoginWindow" ofType:@"app"];
+                if(!lwPath) {
+                    NSLog(@"missing LoginWindow.app!");
+                    sleep(1);
+                    break;
+                }
+                lwPath = [[NSBundle bundleWithPath:lwPath] executablePath];
+                if(!lwPath) {
+                    NSLog(@"missing LoginWindow.app!");
+                    sleep(1);
+                    break;
+                }
+
+                pid_t pid = fork();
+                if(!pid) { // child
+                    seteuid(0);
+                    execle([lwPath UTF8String], [[lwPath lastPathComponent] UTF8String], NULL, NULL);
+                    exit(1);
+                } else {
+                    waitpid(pid, &status, 0); // wait for LoginWindow to exit. exit code is the uid!
+                    NSLog(@"LoginWindow: exit=%u", status);
+                    struct passwd *pw = getpwuid(status);
+                    if(!pw) {
+                        NSLog(@"uid not found");
+                        break;
+                    }
+
+                    uid = status;
+                    gid = pw->pw_gid;
+                    NSLog(@"Logged in user %s, gid %u", pw->pw_name, pw->pw_gid);
+                    curShell = DESKTOP;
+                    break;
+                }
+                break;
+            case DESKTOP: {
+                pid_t pid = fork();
+                if(pid == 0) {
+                    struct passwd *pw = getpwuid(uid);
+                    if(!pw) {
+                        NSLog(@"uid not found");
+                        break;
+                    }
+                    setlogin(pw->pw_name);
+                    chdir(pw->pw_dir);
+
+                    login_cap_t *lc = login_getpwclass(pw);
+                    if (setusercontext(lc, pw, pw->pw_uid,
+                        LOGIN_SETALL & ~(LOGIN_SETLOGIN)) != 0) {
+                            perror("setusercontext");
+                            exit(-1);
+                    }
+                    login_close(lc);
+
+                    NSString *path = [[NSBundle mainBundle] pathForResource:@"SystemUIServer" ofType:@"app"];
+                    if(path)
+                        path = [[NSBundle bundleWithPath:path] executablePath];
+
+                    if(path) {
+                        char buf[32];
+                        sprintf(buf, "%u", pw->pw_uid);
+                        execle([path UTF8String], [[path lastPathComponent] UTF8String], buf, NULL, NULL);
+                    }
+
+                    perror("execl");
+                    exit(1);
+                } else if(pid < 0) {
+                    perror("fork");
+                    sleep(1);
+                    curShell = LOGINWINDOW;
+                    break;
+                }
+                waitpid(pid, &status, 0);
+                NSLog(@"SystemUIServer exited with status %u", status);
+                // FIXME: we could use exit codes for reboot, shutdown, etc
+
+                // safety valve for debugging
+                if(stopOnErr)
+                    execl("/bin/launchctl", "launchctl", "remove", "com.ravynos.WindowServer", NULL);
+                break;
+            }
+        }
+    }
+    [[NSThread currentThread] cancel];
+}
+
 #define _cursor_height 24
 -(void)run {
+    [NSThread detachNewThreadSelector:@selector(launchShell:) toTarget:self withObject:nil];
+
     // FIXME: lock this to vsync of actual display
     pthread_mutex_lock(&renderLock);
     O2BitmapContext *ctx = [fb context];
@@ -463,6 +421,8 @@ pthread_mutex_t renderLock;
         if(poll(&fds, 1, 50) > 0)
             [input run:self];
 
+        cursorRect.origin = [input pointerPos];
+
         // FIXME: handle multiple displays here. Use a thread per display?
         pthread_mutex_lock(&renderLock);
         ctx = [fb context];
@@ -479,13 +439,12 @@ pthread_mutex_t renderLock;
                     WSWindowRecord *win = [wins objectAtIndex:i];
                     if(win.state == HIDDEN)
                         continue;
-                    [win drawFrame:ctx];
+                    [win drawFrame:ctx pointer:cursorRect.origin];
                     [ctx drawImage:win.surface inRect:win.geometry];
                 }
             }
         }
 
-        cursorRect.origin = [input pointerPos];
         cursorRect.origin.y -= _cursor_height; // make sure point of arrow is on actual spot
 
         if(capturedPID == 0) {
@@ -1595,8 +1554,10 @@ pthread_mutex_t renderLock;
                     WSAppRecord *app = [self findAppByPID:out[i].ident];
                     if(app != nil && curApp == app) {
                         [self switchApp];
-                        if(curApp == app)
+                        if(curApp == app) {
                             curApp = nil; // there was nothing to switch to
+                            curWindow = nil;
+                        }
                     }
                     if(app == nil)
                         NSLog(@"PID %u exited, but no matching app record", out[i].ident);
@@ -1670,7 +1631,6 @@ pthread_mutex_t renderLock;
             }
 
             // Handled all WS cases - send this to the window!
-            event->windowID = window.number;
             break;
         }
         case NSLeftMouseDown: {
@@ -1695,7 +1655,6 @@ pthread_mutex_t renderLock;
             }
 
             // Handled all WS cases - send this to the window!
-            NSLog(@"clicked %@ of app %@", window, app);
             curApp = app;
             curWindow = window;
             // FIXME: notify app of activation
@@ -1709,6 +1668,8 @@ pthread_mutex_t renderLock;
 
     if(app == nil)
         return YES;
+
+    event->windowID = window.number;
 
     return [self sendInlineData:event
                          length:sizeof(struct mach_event)

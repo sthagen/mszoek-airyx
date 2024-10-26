@@ -97,7 +97,7 @@ extern pthread_mutex_t renderLock;
 -(BOOL)setUpEnviron:(uid_t)uid;
 -(void)freeEnviron;
 -(void)dispatchEvent:(struct libinput_event *)event;
--(uint32_t)windowCreate:(struct mach_win_data *)data forApp:(WSAppRecord *)app;
+-(uint32_t)windowCreate:(struct wsRPCWindow*)data forApp:(WSAppRecord *)app;
 -(void)run;
 -(void)processKernelQueue;
 -(void)receiveMachMessage;
@@ -108,4 +108,5 @@ extern pthread_mutex_t renderLock;
 -(void)signalQuit;
 -(CGFontRef)titleFont;
 -(NSSize)sizeOfTitleText:(NSString *)title;
+-(void)setShell:(int)shell;
 @end
