@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022-2023 Zoe Knox <zoe@pixin.net>
+ * Copyright (C) 2022-2024 Zoe Knox <zoe@pixin.net>
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -22,12 +22,12 @@
 
 #include <pthread.h>
 #include <unistd.h>
+#include <locale.h>
 #import <AppKit/AppKit.h>
 #import "desktop.h"
 
 const NSString *PrefsDateFormatStringKey = @"DateFormatString";
 const NSString *defaultFormatEN = @"%a %b %d  %I:%M %p";
-
 pthread_mutex_t mtx;
 
 @implementation ClockView
@@ -38,6 +38,8 @@ pthread_mutex_t mtx;
         NSString *locale = [[NSLocale currentLocale] localeIdentifier];
         if([locale hasPrefix:@"en"])
             dateFormat = defaultFormatEN;
+        else if([locale hasPrefix:@"C"])
+            dateFormat = @"%Y-%m-%d %R";
         else
             dateFormat = [prefs objectForKey:NSTimeDateFormatString];
     }
@@ -45,26 +47,25 @@ pthread_mutex_t mtx;
         allowNaturalLanguage:YES locale:[NSLocale currentLocale]];
 
     NSFont *font = [NSFont systemFontOfSize:15];
-    attributes = [NSDictionary dictionaryWithObject:font forKey:NSFontAttributeName];
+    attributes = [NSDictionary
+        dictionaryWithObjects:@[font, [NSColor blackColor]]
+                      forKeys:@[NSFontAttributeName, NSForegroundColorAttributeName]];
 
-    NSAttributedString *dateString = [[NSAttributedString alloc]
-        initWithString:[dateFormatter stringForObjectValue:[NSDate date]]
-        attributes:attributes];
+    dateString = [[NSAttributedString alloc]
+        initWithString:[self currentDateValue] attributes:attributes];
 
     NSSize sz = [dateString size];
     sz.width += menuBarHPad;
-    self = [super initWithText:dateString
-        atPoint:NSMakePoint(frame.size.width - sz.width, menuBarVPad)
-        withMaxWidth:300];
-
+    self = [super initWithFrame:NSMakeRect(frame.size.width - sz.width, menuBarVPad,
+            sz.width + menuBarHPad, sz.height)];
     sz.width += menuBarHPad;
-    [self setFrameSize:sz];
-    [self setFont:font];
-
-    [self setSelectable:NO];
 
     pthread_mutex_init(&mtx, NULL);
-    [NSThread detachNewThreadSelector:@selector(notifyTick:) toTarget:self withObject:nil];
+    [NSTimer scheduledTimerWithTimeInterval:1
+                                     target:self
+                                   selector:@selector(notifyTick:)
+                                   userInfo:nil
+                                    repeats:YES];
 
     return self;
 }
@@ -74,11 +75,13 @@ pthread_mutex_t mtx;
 }
 
 - (void)notifyTick:(id)arg {
-    while(1) {
-        pthread_mutex_lock(&mtx);
-        [[NSNotificationCenter defaultCenter] postNotificationName:@"ClockTick" object:nil userInfo:NULL];
-        pthread_mutex_unlock(&mtx);
-        usleep(400000);
+    static NSString *_dateValue = NULL;
+    dateString = [[NSAttributedString alloc] initWithString:[self currentDateValue] attributes:attributes];
+    if([_dateValue isEqualToString:[self currentDateValue]] == NO) {
+        [[NSColor windowBackgroundColor] set];
+        NSRectFill(_frame);
+        [dateString drawInRect:_frame];
+        _dateValue = [self currentDateValue];
     }
 }
 
@@ -90,13 +93,5 @@ pthread_mutex_t mtx;
 	return YES;
 }
 
-#if 0
-// override default method to ensure thread safety
-- (void)drawRect:(NSRect)rect {
-    pthread_mutex_lock(&mtx);
-    [super drawRect:rect];
-    pthread_mutex_unlock(&mtx);
-}
-#endif
 @end
 

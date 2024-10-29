@@ -39,8 +39,7 @@ extern pthread_mutex_t mtx;
     float mainWidth = frame.size.width * 0.65;
     float extraWidth = frame.size.width - mainWidth;
 
-    //clockView = [[ClockView alloc] initWithFrame:frame];
-    clockView = [[NSView alloc] initWithFrame:frame];
+    clockView = [[ClockView alloc] initWithFrame:frame];
     NSSize clockSize = [clockView size];
 
     menuView = [[MenuView alloc] initWithFrame:
@@ -55,25 +54,11 @@ extern pthread_mutex_t mtx;
     [_contentView addSubview:menuView];
     [_contentView addSubview:extrasView];
     [_contentView addSubview:clockView];
-    [menuView setWindow:self];
-
     [_contentView setAutoresizingMask:0];
 
     [self setAllowsToolTipsWhenApplicationIsInactive:YES];
     
     return self;
-}
-
-- (void)notifyTick:(id)arg {
-    return;
-    NSString *value = [clockView currentDateValue];
-    pthread_mutex_lock(&mtx);
-    [clockView setStringValue:value];
-    [clockView setNeedsDisplay:YES];
-    pthread_mutex_unlock(&mtx);
-    void *event = (__bridge_retained void *)[[NSEvent alloc]
-        initWithType:NSAppKitSystem location:NSMakePoint(0,0) modifierFlags:0 window:nil];
-    [NSApp postEvent:(__bridge NSEvent *)event atStart:YES];
 }
 
 - (NSMenu *)menuForApp:(NSString *)bundleID {
