@@ -36,13 +36,6 @@
 }
 
 #if 0
-            case MSG_ID_PORT:
-            {
-                mach_port_t port = msg.portMsg.descriptor.name;
-                pid_t pid = msg.portMsg.pid;
-                [menuBar setPort:port forPID:pid];
-                break;
-            }
                     case CODE_ADD_RECENT_ITEM:
                     {
                         NSURL *url = [NSURL URLWithString:
@@ -130,14 +123,6 @@
 			    break;
 			}
 
-			NSDictionary *dict = (NSDictionary *)o;
-			unsigned int pid = [[dict objectForKey:@"ProcessID"] unsignedIntValue];
-		    	// watch for this PID to exit
-			struct kevent kev[1];
-			EV_SET(kev, pid, EVFILT_PROC, EV_ADD|EV_ONESHOT,
-				NOTE_EXIT, 0, NULL);
-			kevent(_kq, kev, 1, NULL, 0, NULL);
-
 			[menuBar
 			    addStatusItem:[dict objectForKey:@"StatusItem"]
 			    pid:pid];
@@ -150,27 +135,6 @@
 }
 #endif
 
-// called from our kq watcher thread
-// FIXME: get these as mach_msg from WS
-- (void)processKernelQueue {
-    struct kevent out[128];
-    int count = kevent(_kq, NULL, 0, out, 128, NULL);
-
-    for(int i = 0; i < count; ++i) {
-        switch(out[i].filter) {
-            case EVFILT_PROC:
-                if((out[i].fflags & NOTE_EXIT)) {
-                    //NSLog(@"PID %lu exited", out[i].ident);
-                    //[menuBar removeMenuForPID:out[i].ident]; // FIXME: forApp
-                    //[menuBar removeStatusItemsForPID:out[i].ident]; // FIXME: forApp
-                }
-                break;
-            default:
-                NSLog(@"unknown filter");
-        }
-    }
-}
-
 -(void)applicationWillFinishLaunching:(NSNotification *)note {
     NSScreen *mainDisplay = [[NSScreen screens] objectAtIndex:0];
     [menuBar initWithFrame:[mainDisplay visibleFrame]];
@@ -180,7 +144,9 @@
     [menuBar makeMainWindow];
 
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(menuDidUpdate:)
-        name:WLMenuDidUpdateNotification object:nil];
+        name:NSMenuDidUpdateNotification object:nil];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(appDidQuit:)
+        name:NSApplicationDidQuitNotification object:nil];
 }
 
 /* Recursively set all menu targets and delegates to our proxy */
@@ -201,16 +167,18 @@
 - (void)menuDidUpdate:(NSNotification *)note {
     NSMutableDictionary *dict = (NSMutableDictionary *)[note userInfo];
     pid_t pid = [[dict objectForKey:@"ProcessID"] intValue];
+    NSString *bundleID = [dict objectForKey:@"BundleID"];
     NSMenu *mainMenu = [dict objectForKey:@"MainMenu"];
     [self _menuEnumerateAndChange:mainMenu];
 
-    [menuBar setMenu:mainMenu forApp:@"com.ravynos.client-demo"];
-    [menuBar activateApp:@"com.ravynos.client-demo"];
-    //[menuBar setMenu:mainMenu forPID:pid]; // FIXME: forApp
+    [menuBar setMenu:mainMenu forApp:bundleID];
+    [menuBar activateApp:bundleID]; // FIXME: wait on activation message from WS
+}
 
-    //FIXME: forApp
-    //if(![menuBar activateMenuForPID:pid]) // FIXME: don't activate unless window becomes active
-    //    NSLog(@"could not activate menus!");
+-(void)appDidQuit:(NSNotification *)note {
+    NSMutableDictionary *dict = (NSMutableDictionary *)[note userInfo];
+    NSString *bundleID = [dict objectForKey:@"BundleID"];
+    [menuBar removeMenuForApp:bundleID];
 }
 
 // FIXME: send to WS
@@ -234,11 +202,11 @@
 }
 
 -(void)mouseDown:(NSEvent *)event {
-    NSLog(@"mouse down at %@", event);
+//    NSLog(@"mouse down at %@", event);
 }
 
 -(void)mouseMoved:(NSEvent *)event {
-    NSLog(@"mouse moved at %@", event);
+//    NSLog(@"mouse moved at %@", event);
 }
 
 @end

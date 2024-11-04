@@ -70,6 +70,7 @@ typedef enum {
 } NSApplicationPrintReply;
 
 @interface NSApplication : NSResponder {
+    NSString *bundleID;
     NSDisplay *_display;
     id _delegate;
     NSMutableArray *_windows;
@@ -210,8 +211,6 @@ typedef enum {
 - (void)addRecentItem:(NSURL *)url;
 
 // private
-- (DKMenu *)dbusMenu;
-- (DKConnection *)dbusConnection;
 - (void)_addWindow:(NSWindow *)window;
 
 - (void)_windowWillBecomeActive:(NSWindow *)window;
