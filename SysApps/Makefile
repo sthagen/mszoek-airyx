@@ -16,15 +16,12 @@ build: buildInstaller grabscr
 	mkdir -p ${BUILDROOT}/usr/bin
 	cp -av ${OBJTOP}/SysApps/grabscr ${BUILDROOT}/usr/bin
 	#cp -av ${MAKEOBJDIR}/Installer/"Install ravynOS.app" ${BUILDROOT}/Applications/Utilities/
-	#cp -av ${.CURDIR}/foot.app ${BUILDROOT}/Applications/Utilities/
-	#rm -f ${BUILDROOT}/Applications/Utilities/foot.app/foot.c
-	#mkdir -p ${BUILDROOT}/Applications/Utilities/foot.app/Contents/ravynOS
-	#${CC} -o ${BUILDROOT}/Applications/Utilities/foot.app/Contents/ravynOS/foot ${.CURDIR}/foot.app/foot.c
 
 buildInstaller:
 	#${MAKE} -C ${.CURDIR}/Installer build
 
 grabscr: grabscr.m
+	mkdir -p ${OBJTOP}/SysApps
 	${CC} -B${OBJTOP}/tmp/usr/bin --sysroot=${OBJTOP}/tmp \
 		-g -o ${MAKEOBJDIR}/${.TARGET} ${.ALLSRC} \
 		-I${OBJTOP}/Frameworks/AppKit/Headers \
@@ -32,6 +29,6 @@ grabscr: grabscr.m
 		-F${OBJTOP}/Frameworks/OpenGL \
 		-I${SRCTOP}/Frameworks -L${OBJTOP}/Frameworks/AppKit/AppKit.framework \
 		-L${OBJTOP}/Frameworks/CoreGraphics/CoreGraphics.framework \
-		-lAppKit -lCoreGraphics \
+		-lAppKit -lCoreGraphics -lobjc \
 		-Wl,-R/System/Library/Frameworks/AppKit.framework/Versions/A \
 		-Wl,-R/System/Library/Frameworks/CoreGraphics.framework/Versions/A
