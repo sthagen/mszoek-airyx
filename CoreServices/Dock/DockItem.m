@@ -278,7 +278,7 @@
     return [_icon image];
 }
 
--(id)app {
+-(DockItem *)app {
     return _app;
 }
 
@@ -412,7 +412,7 @@ view does not need to draw the application or custom string badges.
         '\0',
     };
 
-    strncpy(data.buf, [[self app] bundleIdentifier], sizeof(data.buf));
+    strncpy(data.buf, [[[self app] bundleIdentifier] UTF8String], sizeof(data.buf));
     data.win.base.len += strlen(data.buf);
     _windowServerRPC(&data, sizeof(data), NULL, NULL);
 }
