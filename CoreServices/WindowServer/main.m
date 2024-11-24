@@ -87,11 +87,6 @@ int main(int argc, const char *argv[]) {
     signal(SIGTHR, SIG_IGN);
     signal(SIGLIBRT, SIG_IGN);
 
-    if(setjmp(jb) != 0)
-        goto __finish; // sighandler must have caught something - get out
-
-    signal(SIGSEGV, crashHandler);
-
     /* Drop our controlling terminal - we're gonna switch */
     /* This is the recommended but sucky way. Using TIOCNOTTY isn't working */
     pid_t pid = fork();
@@ -129,6 +124,17 @@ int main(int argc, const char *argv[]) {
         FINISH(1);
     }
 
+    vtmode_t mode = {
+        .mode = VT_PROCESS,
+        .frsig = SIGUSR1,
+        .acqsig = SIGUSR1,
+        .relsig = SIGUSR2
+    };
+
+    if(setjmp(jb) != 0)
+        goto __finish; // sighandler must have caught something - get out
+    signal(SIGSEGV, crashHandler);
+
     if(ioctl(wsfd, VT_ACTIVATE, vt) < 0) {
         NSLog(@"Cannot activate terminal: %s", strerror(errno));
         FINISH(1);
@@ -138,12 +144,6 @@ int main(int argc, const char *argv[]) {
     if(tcsetsid(wsfd, getpid())  < 0)
         NSLog(@"tcsetsid: %s", strerror(errno));
 
-    vtmode_t mode = {
-        .mode = VT_PROCESS,
-        .frsig = SIGUSR1,
-        .acqsig = SIGUSR1,
-        .relsig = SIGUSR2
-    };
     if(ioctl(wsfd, VT_SETMODE, &mode) < 0)
         NSLog(@"Cannot lock VT switching: %s", strerror(errno));
 
@@ -173,12 +173,16 @@ __finish:
     // Restore old terminal settings
     tcsetattr(wsfd, TCSANOW, &old);
 
+    // Go back to the original vt now!
+    if(ioctl(fd, VT_ACTIVATE, origvt) < 0)
+        NSLog(@"Cannot restore original VT %d: %s", origvt, strerror(errno));
+    else
+        NSLog(@"Reactivated VT %d", origvt);
+
     memset(&mode, 0, sizeof(mode));
     if(ioctl(wsfd, VT_SETMODE, &mode) < 0)
         NSLog(@"Cannot release VT switching: %s", strerror(errno));
 
-    // Go back to the original vt now!
-    ioctl(fd, VT_ACTIVATE, origvt);
     close(fd);
     close(wsfd);
     pthread_cancel(machSvcThread);

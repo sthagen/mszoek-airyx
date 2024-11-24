@@ -298,6 +298,7 @@ static NSString *_pathForPID(pid_t pid) {
     }
 
     WSWindowRecord *winrec = [app windowWithID:data->windowID];
+    int oldState = winrec.state;
     winrec.state = data->state;
     winrec.styleMask = data->style;
     // FIXME: this will probably require changing the surface and shm buffer
@@ -329,6 +330,10 @@ static NSString *_pathForPID(pid_t pid) {
 
     if(logLevel >= WS_INFO)
         NSLog(@"windowModify %@ win %@", app, winrec);
+
+    if(oldState == MINIMIZED && winrec.state != MINIMIZED)
+        [self notifyDock:data length:sizeof(struct wsRPCWindow) 
+                withCode:CODE_WINDOW_STATE forApp:app];
 }
 
 -(void)addWindowByLevel:(WSWindowRecord *)window {
@@ -1480,7 +1485,11 @@ static NSString *_pathForPID(pid_t pid) {
     }
 }
 
-// App management
+/* App management. If a window number is included (and found), make it the active
+ * window. If not, just activate the app and let it choose a window. Dock calls this
+ * with window = 0 to activate a running app, and with a windowID to restore a
+ * miniaturized window.
+ */
 -(void)rpcApplicationActivate:(PortMessage *)msg {
     struct wsRPCWindow *data = (struct wsRPCWindow *)msg->data;
     const char *bundleID = (const char *)((msg->data)+sizeof(struct wsRPCWindow));
@@ -1489,11 +1498,41 @@ static NSString *_pathForPID(pid_t pid) {
     if(app != nil) {
         WSAppRecord *oldApp = curApp;
         WSWindowRecord *winrec = [app windowWithID:data->windowID];
-        winrec.state = winrec.prevState; // deminiaturize to previous state 
+        if(winrec != nil)
+            winrec.state = winrec.prevState; // deminiaturize to previous state 
+        else {
+            // Dock has called this to activate an app. Check for minimized windows.
+            NSArray *wins = [app windows];
+            WSWindowRecord *restore = nil;
+            BOOL visWindows = NO;
+            for(int x = 0; x < [wins count]; ++x) {
+                winrec = [wins objectAtIndex:x];
+                if(winrec.state != MINIMIZED && winrec.state != HIDDEN && winrec.state != CLOSED) {
+                    visWindows = YES;
+                    break;
+                } else if(winrec.state == MINIMIZED)
+                    restore = winrec;
+            }
+            if(!visWindows) {
+                winrec = nil;
+                if(restore != nil) {
+                    // No visible windows but something is minimized - restore it
+                    // Otherwise we activate the app and let it choose one
+                    restore.state = restore.prevState;
+                    winrec = restore;
+                }
+            }
+        }
+
         curApp = app;
         [self switchFromApp:oldApp toWindow:winrec];
-        // now tell Dock about it
-        data->state = winrec.state;
+
+        // now tell Dock and the app about the window state changes
+        if(winrec != nil) {
+            data->windowID = winrec.number;
+            data->state = winrec.state;
+            [self updateClientWindowState:winrec];
+        }
         [self notifyDock:data length:sizeof(struct wsRPCWindow) 
                 withCode:CODE_WINDOW_STATE forApp:app];
     } else {
@@ -2135,7 +2174,11 @@ static NSString *_pathForPID(pid_t pid) {
 
 -(void)signalQuit {
     [self performLogout:0];
-    execl("/bin/launchctl", "launchctl", "remove", "com.ravynos.WindowServer", NULL);
+    pid_t pid = fork();
+    if(pid == 0)
+        execl("/bin/launchctl", "launchctl", "remove", "com.ravynos.WindowServer", NULL);
+    else
+        waitpid(pid, NULL, 0);
     ready = NO;
 }
 
