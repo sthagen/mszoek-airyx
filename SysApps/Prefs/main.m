@@ -1,6 +1,6 @@
 /*
- * Copyright (C) 2024 Zoe Knox <zoe@pixin.net>
- * 
+ * Copyright (C) 2024 Zoe Knox <zoe@ravynsoft.com>
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
  * in the Software without restriction, including without limitation the rights
@@ -20,20 +20,16 @@
  * THE SOFTWARE.
  */
 
-#define WINDOWSERVER // we are building WindowServer itself - flag to message.h
+#import "SysPrefs.h"
 
-#define SA_RESTART      0x0002  /* restart system call on signal return */
+int main(int argc, const char *argv[])
+{
+    __NSInitializeProcess(argc, argv);
 
-enum {
-    EXIT_RESTART = 200,
-    EXIT_SHUTDOWN,
-    EXIT_LOGOUT
-};
-
-enum {
-    WS_ERROR, WS_WARNING, WS_INFO
-};
-
-enum ShellType {
-    NONE, LOGINWINDOW, DESKTOP, LOADING
-};
+    NSAutoreleasePool *pool = [NSAutoreleasePool new];
+    SystemPreferences *app = (SystemPreferences *)[SystemPreferences sharedApplication];
+    [app setDelegate:app];
+    [pool drain];
+    [app run];
+    return 0;
+}
