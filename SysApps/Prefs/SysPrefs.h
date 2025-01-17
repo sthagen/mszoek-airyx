@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2024 Zoe Knox <zoe@ravynsoft.com>
+ * Copyright (C) 2024-2025 Zoe Knox <zoe@ravynsoft.com>
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -24,7 +24,12 @@
 
 @interface SystemPreferences : NSApplication {
     NSWindow *window;
-    NSArray *panes;
+    NSMutableArray *panes;
+    NSFont *font;
+    NSTimeInterval doubleClickInterval;
+    NSTimeInterval lastClickTime;
+    NSButton *lastClickObject;
+    unsigned clickCount;
 }
 
 @end
