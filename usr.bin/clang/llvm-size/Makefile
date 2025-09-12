@@ -1,5 +1,6 @@
 .include <src.opts.mk>
 
+PACKAGE=	toolchain
 PROG_CXX=	llvm-size
 
 SRCDIR=		llvm/tools/llvm-size
@@ -26,5 +27,8 @@ CLEANFILES+=	${TGHDRS} ${TGHDRS:C/$/.d/}
 LINKS+=		${BINDIR}/llvm-size ${BINDIR}/size
 MLINKS+=	llvm-size.1 size.1
 .endif
+
+LIBS+=		libmach.so
+LDFLAGS+=	-lmach
 
 .include "../llvm.prog.mk"

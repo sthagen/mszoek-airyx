@@ -10,17 +10,21 @@ SRCS+=		ClangScanDeps.cpp \
 .include "${SRCTOP}/lib/clang/clang.pre.mk"
 
 CFLAGS+=	-I${.OBJDIR}
-TDFILE=		Opts.td
-INCFILE=	${TDFILE:.td=.inc}
+
+INCFILE=	Opts.inc
+TDFILE=		${LLVM_BASE}/${SRCDIR}/Opts.td
 GENOPT=		-gen-opt-parser-defs
 
 ${INCFILE}: ${TDFILE}
 	${LLVM_TBLGEN} ${GENOPT} -I ${LLVM_SRCS}/include -d ${.TARGET:C/$/.d/} \
-	    -o ${.TARGET} ${.ALLSRC}
+	    -o ${.TARGET} ${TDFILE}
 TGHDRS+=	${INCFILE}
 
 DEPENDFILES+=	${TGHDRS:C/$/.d/}
 DPSRCS+=	${TGHDRS}
 CLEANFILES+=	${TGHDRS} ${TGHDRS:C/$/.d/}
+
+LIBS+=		libmach.so
+LDFLAGS+=	-lmach
 
 .include "../clang.prog.mk"
